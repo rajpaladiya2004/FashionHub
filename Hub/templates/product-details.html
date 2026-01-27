@@ -1,0 +1,721 @@
+{% extends "base.html" %}
+
+
+{% load static %}
+
+
+{% block title %}ProdductDetails - FashionHub{% endblock %}
+
+{% block content %}
+
+<style>
+    .pd-cta-wrap { display: flex; flex-direction: column; gap: 12px; }
+    .qty-control { display: inline-flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 12px; background: #f9fafb; }
+    .qty-input { width: 64px; text-align: center; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; font-weight: 600; }
+    .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .qty-input { -moz-appearance: textfield; appearance: textfield; }
+    .qty-btn { width: 36px; height: 36px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; font-weight: 700; color: #111827; transition: background 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease; }
+    .qty-btn:hover { background: #111827; color: #fff; border-color: #111827; box-shadow: 0 8px 20px rgba(17, 24, 39, 0.18); }
+    .details-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+    .action-chip { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; color: #111827; font-weight: 600; text-decoration: none; transition: background 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease; }
+    .action-chip:hover { background: #111827; color: #fff; border-color: #111827; box-shadow: 0 10px 26px rgba(17, 24, 39, 0.18); }
+    .action-chip .icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #f3f4f6; color: #111827; transition: background 120ms ease, color 120ms ease; }
+    .action-chip:hover .icon { background: rgba(255, 255, 255, 0.16); color: #fff; }
+    .action-chip.wishlisted { background: #111827; color: #fff; border-color: #111827; }
+    .action-chip.wishlisted .icon { background: rgba(255, 255, 255, 0.16); color: #fff; }
+    .details-meta { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 8px; }
+    .pd-title { font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px; }
+</style>
+
+    <!-- breadcrumb__area-start -->
+        <section class="breadcrumb__area box-plr-75">
+            <div class="container">
+                <div class="row">
+                    <div class="col-xxl-12">
+                        <div class="breadcrumb__wrapper">
+                            <nav aria-label="breadcrumb">
+                                <ol class="breadcrumb">
+                                  <li class="breadcrumb-item"><a href="{% url 'index' %}">Home</a></li>
+                                  <li class="breadcrumb-item active" aria-current="page">Shop</li>
+                                </ol>
+                              </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- breadcrumb__area-end -->
+
+        <!-- product-details-start -->
+        <div class="product-details">
+            <div class="container">
+                <div class="row">
+                    <div class="col-xl-6">
+                        <div class="product__details-nav d-sm-flex align-items-start">
+                            <ul class="nav nav-tabs flex-sm-column justify-content-between" id="productThumbTab" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                  <button class="nav-link active" id="thumbOne-tab" data-bs-toggle="tab" data-bs-target="#thumbOne" type="button" role="tab" aria-controls="thumbOne" aria-selected="true">
+                                      {% if product.image %}
+                                          <img src="{{ product.image.url }}" alt="{{ product.name }}" style="max-width: 80px;">
+                                      {% else %}
+                                          <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ product.name }}" style="max-width: 80px; background-color: #f0f0f0;">
+                                      {% endif %}
+                                  </button>
+                                </li>
+                                {% for additional_image in product.additional_images.all %}
+                                <li class="nav-item" role="presentation">
+                                  <button class="nav-link" id="thumb{{ forloop.counter }}-tab" data-bs-toggle="tab" data-bs-target="#thumb{{ forloop.counter }}" type="button" role="tab" aria-controls="thumb{{ forloop.counter }}" aria-selected="false">
+                                      <img src="{{ additional_image.image.url }}" alt="{{ product.name }}" style="max-width: 80px;">
+                                  </button>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            <div class="product__details-thumb">
+                                <div class="tab-content" id="productThumbContent">
+                                    <div class="tab-pane fade show active" id="thumbOne" role="tabpanel" aria-labelledby="thumbOne-tab">
+                                        <div class="product__details-nav-thumb w-img">
+                                            {% if product.image %}
+                                                <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                                            {% else %}
+                                                <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ product.name }}" style="background-color: #f0f0f0; width: 100%; height: auto;">
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% for additional_image in product.additional_images.all %}
+                                    <div class="tab-pane fade" id="thumb{{ forloop.counter }}" role="tabpanel" aria-labelledby="thumb{{ forloop.counter }}-tab">
+                                        <div class="product__details-nav-thumb w-img">
+                                            <img src="{{ additional_image.image.url }}" alt="{{ product.name }}">
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                  </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6">
+                        <div class="product__details-content">
+                            <h3 class="pd-title">{{ product.name }}</h3>
+                            <div class="pd-rating mb-10">
+                                <ul class="rating">
+                                    {% for i in "12345" %}
+                                        {% if i|add:"0" <= product.rating %}
+                                            <li><a href="#"><i class="fas fa-star"></i></a></li>
+                                        {% else %}
+                                            <li><a href="#"><i class="fal fa-star"></i></a></li>
+                                        {% endif %}
+                                    {% endfor %}
+                                </ul>
+                                <span>({{ product.review_count }} review{% if product.review_count != 1 %}s{% endif %})</span>
+                                <span><a href="#">Add your review</a></span>
+                            </div>
+                            <div class="price mb-10">
+                                <span>${{ product.price }}</span>
+                                {% if product.old_price %}
+                                    <span style="text-decoration: line-through; color: #999; margin-left: 10px;">${{ product.old_price }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="features-des mb-20 mt-10">
+                                <ul>
+                                    <li><a href="#"><i class="fas fa-circle"></i> High Quality Product</a></li>
+                                    <li><a href="#"><i class="fas fa-circle"></i> Fast Shipping Available</a></li>
+                                    <li><a href="#"><i class="fas fa-circle"></i> Easy Returns & Exchanges</a></li>
+                                    <li><a href="#"><i class="fas fa-circle"></i> 100% Authentic Guarantee</a></li>
+                                </ul>
+                            </div>
+                            <div class="product-stock mb-20">
+                                <h5>Availability: <span> {{ product.stock }} in stock</span></h5>
+                            </div>
+                            <div class="cart-option mb-15">
+                                <form method="POST" action="{% url 'add_to_cart' %}" class="pd-cta-wrap">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="product_id" value="{{ product.id }}">
+                                    <div class="d-flex flex-wrap align-items-center gap-3">
+                                        <div class="qty-control" data-max="{{ product.stock|default:999 }}">
+                                            <button type="button" class="qty-btn" data-step="-1" aria-label="Decrease quantity">-</button>
+                                            <input class="qty-input" type="number" name="quantity" value="1" min="1" max="{{ product.stock }}" inputmode="numeric" aria-label="Quantity">
+                                            <button type="button" class="qty-btn" data-step="1" aria-label="Increase quantity">+</button>
+                                        </div>
+                                        <button type="submit" class="cart-btn" {% if product.stock == 0 %}disabled{% endif %}>
+                                            <i class="fas fa-shopping-cart"></i> Add to Cart
+                                        </button>
+                                    </div>
+                                    <p class="text-muted small mb-0">Quantity updates instantly — no tiny spinners.</p>
+                                </form>
+                            </div>
+                            <div class="details-meta">
+                                <div class="details-actions">
+                                    <button type="button" class="action-chip wishlist-chip {% if in_wishlist %}wishlisted{% endif %}" data-product-id="{{ product.id }}" data-logged-in="{% if user.is_authenticated %}1{% else %}0{% endif %}" onclick="handlePdWishlistClick(this);">
+                                        <span class="icon"><i class="{% if in_wishlist %}fas{% else %}fal{% endif %} fa-heart"></i></span>
+                                        <span>{% if in_wishlist %}In wishlist{% else %}Add to wishlist{% endif %}</span>
+                                    </button>
+                                    <button type="button" class="action-chip" onclick="compareProduct({{ product.id }});">
+                                        <span class="icon"><i class="fal fa-layer-group"></i></span>
+                                        <span>Compare</span>
+                                    </button>
+                                    <button type="button" class="action-chip" onclick="shareProduct();">
+                                        <span class="icon"><i class="fal fa-share-alt"></i></span>
+                                        <span>Share</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="product-tag-area mt-15">
+                                <div class="product_info">
+                                    <span class="sku_wrapper">
+                                        <span class="title">SKU:</span>
+                                        <span class="sku">{{ product.sku|default:product.slug }}</span>
+                                    </span>
+                                    <span class="posted_in">
+                                        <span class="title">Categories:</span>
+                                        <a href="{% url 'shop' %}?category={{ product.category }}">{{ product.get_category_display|default:"General" }}</a>
+                                    </span>
+                                    {% if product.tags %}
+                                    <span class="tagged_as">
+                                        <span class="title">Tags:</span>
+                                        {% for tag in product.get_tags_list %}
+                                            <a href="#">{{ tag }}</a>{% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- product-details-end -->
+
+        <!-- product-details-des-start -->
+        <div class="product-details-des mt-40 mb-60">
+            <div class="container">
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="product__details-des-tab">
+                            <ul class="nav nav-tabs" id="productDesTab" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                  <button class="nav-link active" id="des-tab" data-bs-toggle="tab" data-bs-target="#des" type="button" role="tab" aria-controls="des" aria-selected="true">Description </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="aditional-tab" data-bs-toggle="tab" data-bs-target="#aditional" type="button" role="tab" aria-controls="aditional" aria-selected="false">Additional information</button>
+                                  </li>
+                                <li class="nav-item" role="presentation">
+                                  <button class="nav-link" id="review-tab" data-bs-toggle="tab" data-bs-target="#review" type="button" role="tab" aria-controls="review" aria-selected="false">Reviews (1) </button>
+                                </li>
+                              </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-content" id="prodductDesTaContent">
+                    <div class="tab-pane fade active show" id="des" role="tabpanel" aria-labelledby="des-tab">
+                        <div class="product__details-des-wrapper">
+                            {% if product.description %}
+                                {{ product.description|linebreaks }}
+                            {% else %}
+                                <p class="des-text mb-35">Designed by Hans J. Wegner in 1949 as one of the first models created especially for Carl Hansen & Son, and produced since 1950. The last of a series of chairs wegner designed based on inspiration from antique Chinese armchairs. The gently rounded top together with the back and seat offers a variety of comfortable seating positions,ideal for both long visits to the dining table and relaxed lounging.</p>
+                                <h6 class="des-sm-title">The standard passage, used since the 1500s.</h6>
+                                <p class="des-text mb-35">A light chair, easy to move around the dining table and about the room. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Lorem ipsum dolor sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+                            {% endif %}
+                            <div class="features-des-image text-center">
+                                <img src="{% static 'assets/img/features-product/product-content-1.jpg'%}" alt="">
+                            </div>
+                            <div class="product-des-section mb-90">
+                                <h5 class="des-section mb-30">Get 30% Daily Cash
+                                  <br>  Back with Membership Card.</h5>
+                                  <p>A new collection of lounge furniture, occasional tables and a stool by Edward Barber & Jay Osgerby offers a relaxed, contemporary attitude toward interior design. The lounge furniture includes four individualized sized sofas, and three complementary ottomans. Available in a range of upholstery fabrics and leathers, the lounge furniture is distinguished by stitched seams that reinforce its architectural profile, softened by the curvature of cushions on each face range of upholstery fabrics and leathers.</p>
+                            </div>
+                            <div class="row mb-80">
+                                <div class="col-xl-6">
+                                    <div class="des-single mb-30 text-center">
+                                        <div class="features-des-image text-center">
+                                            <img src="{% static 'assets/img/features-product/product-content-2.jpg'%}" alt="">
+                                        </div>
+                                        <h5 class="des-section">Get 30% Daily Cash
+                                            <br>  Back with Membership Card.</h5>
+                                        <p>Sit amet conse ctetur adipisicing elit, sed do <br> eiusmod tempor incididunt ut labore et dolore  magna aliqua.</p>
+                                    </div>
+                                </div>
+                                <div class="col-xl-6">
+                                    <div class="des-single text-center mb-30">
+                                        <div class="features-des-image">
+                                            <img src="{% static 'assets/img/features-product/product-content-3.jpg'%}" alt="">
+                                        </div>
+                                        <h5 class="des-section text-center">Get 70% Daily Cash
+                                            <br>  Back with Membership Card.</h5>
+                                        <p>Sit amet conse ctetur adipisicing elit, sed do <br> eiusmod tempor incididunt ut labore et dolore  magna aliqua.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="features-des-image features-des-image-2 text-center mb-50 w-img">
+                                <img src="{% static 'assets/img/features-product/product-content-4.jpg'%}" alt="">
+                            </div>
+                            <div class="des-sm-features">
+                                <div class="des-sm-fet text-center mb-30">
+                                    <img src="{% static 'assets/img/features-product/product-content-5.png" alt="">
+                                    <span>Ultra Wide Angle</span>
+                                </div>
+                                <div class="des-sm-fet text-center mb-30">
+                                    <img src="{% static 'assets/img/features-product/product-content-6.png" alt="">
+                                    <span>Live Focus On</span>
+                                </div>
+                            </div>
+                            <p class="des-text mb-35">Designed by Puik in 1949 as one of the first models created especially for Carl Hansen & Son, and produced since 1950. The last of a series of chairs wegner designed based on inspiration from antique Chinese armchairs. The gently rounded top together with the back and seat offers a variety of comfortable seating positions,ideal for both long visits to the dining table and relaxed lounging. A light chair easy to move around the dining table and about the room. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla.</p>
+                            <h6 class="des-sm-title">Section 1.10.32 of "de Finibus Bonorum et Malorum", written by Cicero in 45 BC.</h6>
+                            <p class="des-text mb-25">Sound of Marshall, unplugs the chords, and takes the show on the road. Weighing in under 7 pounds, the Kilburn is a lightweight piece of vintage styled engineering. Setting the bar as one of the loudest speakers in its class, the Kilburn is a compact, stout-hearted hero with a well-balanced audio which boasts a clear midrange and extended highs for a sound that is both articulate and pronounced. The analogue knobs allow you to fine tune the controls to your personal preferences while the guitar-influenced leather strap enables easy and stylish travel.</p>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="aditional" role="tabpanel" aria-labelledby="aditional-tab">
+                        <div class="product__desc-info">
+                            <ul>
+                               {% if product.weight %}
+                               <li>
+                                  <h6>Weight</h6>
+                                  <span>{{ product.weight }}</span>
+                               </li>
+                               {% endif %}
+                               {% if product.dimensions %}
+                               <li>
+                                  <h6>Dimensions</h6>
+                                  <span>{{ product.dimensions }}</span>
+                               </li>
+                               {% endif %}
+                               {% if product.color %}
+                               <li>
+                                  <h6>Color</h6>
+                                  <span>{{ product.color }}</span>
+                               </li>
+                               {% endif %}
+                               {% if product.size %}
+                               <li>
+                                  <h6>Size</h6>
+                                  <span>{{ product.size }}</span>
+                               </li>
+                               {% endif %}
+                               <li>
+                                  <h6>Model</h6>
+                                  <span>{{ product.name }}</span>
+                               </li>
+                               {% if product.shipping_info %}
+                               <li>
+                                  <h6>Shipping</h6>
+                                  <span>{{ product.shipping_info }}</span>
+                               </li>
+                               {% endif %}
+                               {% if product.care_info %}
+                               <li>
+                                  <h6>Care Info</h6>
+                                  <span>{{ product.care_info }}</span>
+                               </li>
+                               {% endif %}
+                               {% if product.brand %}
+                               <li>
+                                  <h6>Brand</h6>
+                                  <span>{{ product.brand }}</span>
+                               </li>
+                               {% endif %}
+                            </ul>
+                         </div>
+                    </div>
+                    <div class="tab-pane fade" id="review" role="tabpanel" aria-labelledby="review-tab">
+                        <div class="product__details-review">
+                            <style>
+                                .review-item { padding: 20px; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px; }
+                                .review-item:last-child { border-bottom: none; }
+                                .review-header { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; }
+                                .review-avatar { width: 50px; height: 50px; border-radius: 50%; background: #f3f4f6; display: grid; place-items: center; font-weight: 700; color: #111827; }
+                                .review-meta h6 { margin: 0; font-weight: 600; color: #111827; }
+                                .review-meta .date { color: #6b7280; font-size: 13px; }
+                                .review-stars { color: #f59e0b; margin-bottom: 8px; }
+                                .review-comment { color: #4b5563; line-height: 1.6; }
+                                .no-reviews { text-align: center; padding: 40px 20px; color: #9ca3af; }
+                                .rating-selector { display: flex; gap: 8px; margin-bottom: 20px; }
+                                .rating-selector input[type="radio"] { display: none; }
+                                .rating-selector label { cursor: pointer; font-size: 24px; color: #d1d5db; transition: color 120ms ease; }
+                                .rating-selector input:checked ~ label,
+                                .rating-selector label:hover,
+                                .rating-selector label:hover ~ label { color: #f59e0b; }
+                            </style>
+                            
+                            <!-- Approved Reviews List -->
+                            <div class="row">
+                                <div class="col-xl-12">
+                                    <div class="mb-4">
+                                        <h5 class="mb-3">Customer Reviews ({{ review_count }})</h5>
+                                        {% if reviews %}
+                                            {% for review in reviews %}
+                                            <div class="review-item">
+                                                <div class="review-header">
+                                                    <div class="review-avatar">{{ review.name|first|upper }}</div>
+                                                    <div class="review-meta">
+                                                        <h6>{{ review.name }}</h6>
+                                                        <span class="date">{{ review.created_at|date:"F d, Y" }}</span>
+                                                    </div>
+                                                </div>
+                                                <div class="review-stars">
+                                                    {% for i in "12345" %}
+                                                        {% if forloop.counter <= review.rating %}
+                                                            <i class="fas fa-star"></i>
+                                                        {% else %}
+                                                            <i class="fal fa-star"></i>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                                <p class="review-comment">{{ review.comment }}</p>
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <div class="no-reviews">
+                                                <i class="fal fa-comments" style="font-size: 48px; margin-bottom: 12px; display: block;"></i>
+                                                <p>No reviews yet. Be the first to review this product!</p>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Add Review Form -->
+                            <div class="row">
+                                <div class="col-xl-12">
+                                    <div class="product__details-comment">
+                                        <div class="comment-title mb-20">
+                                           <h3>Add a review</h3>
+                                           <p>Your email address will not be published. Required fields are marked *</p>
+                                           {% if not user.is_authenticated %}
+                                               <p class="text-danger"><strong>Please <a href="{% url 'login' %}?next={{ request.path }}">login</a> to submit a review.</strong></p>
+                                           {% endif %}
+                                        </div>
+                                        
+                                        {% if user.is_authenticated %}
+                                        <div class="comment-input-box">
+                                           <form method="POST" action="{% url 'submit_review' product.id %}">
+                                              {% csrf_token %}
+                                              <div class="row">
+                                                <div class="col-xxl-12 mb-3">
+                                                    <label class="form-label">Overall rating *</label>
+                                                    <div class="rating-selector">
+                                                        <input type="radio" name="rating" value="5" id="star5" checked>
+                                                        <label for="star5"><i class="fas fa-star"></i></label>
+                                                        <input type="radio" name="rating" value="4" id="star4">
+                                                        <label for="star4"><i class="fas fa-star"></i></label>
+                                                        <input type="radio" name="rating" value="3" id="star3">
+                                                        <label for="star3"><i class="fas fa-star"></i></label>
+                                                        <input type="radio" name="rating" value="2" id="star2">
+                                                        <label for="star2"><i class="fas fa-star"></i></label>
+                                                        <input type="radio" name="rating" value="1" id="star1">
+                                                        <label for="star1"><i class="fas fa-star"></i></label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-xxl-6 col-xl-6">
+                                                    <div class="comment-input">
+                                                       <input type="text" name="name" placeholder="Your Name *" required value="{{ user.get_full_name|default:user.username }}">
+                                                    </div>
+                                                 </div>
+                                                 <div class="col-xxl-6 col-xl-6">
+                                                    <div class="comment-input">
+                                                       <input type="email" name="email" placeholder="Your Email *" required value="{{ user.email }}">
+                                                    </div>
+                                                 </div>
+                                                 <div class="col-xxl-12">
+                                                       <textarea name="comment" placeholder="Your review *" class="comment-input comment-textarea" required></textarea>
+                                                 </div>
+                                                 <div class="col-xxl-12">
+                                                    <div class="comment-submit">
+                                                       <button type="submit" class="cart-btn">Submit Review</button>
+                                                       <p class="text-muted small mt-2">Your review will be visible after admin approval.</p>
+                                                    </div>
+                                                 </div>
+                                              </div>
+                                           </form>
+                                        </div>
+                                        {% endif %}
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- product-details-des-end -->
+
+        <!-- shop modal start -->
+        <div class="modal fade" id="productModalId" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered product__modal" role="document">
+                <div class="modal-content">
+                    <div class="product__modal-wrapper p-relative">
+                        <div class="product__modal-close p-absolute">
+                            <button data-bs-dismiss="modal"><i class="fal fa-times"></i></button>
+                        </div>
+                        <div class="product__modal-inner">
+                            <div class="row">
+                            <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                <div class="product__modal-box">
+                                    <div class="tab-content" id="modalTabContent">
+                                        <div class="tab-pane fade show active" id="nav1" role="tabpanel" aria-labelledby="nav1-tab">
+                                            <div class="product__modal-img w-img">
+                                                <img src="{% static 'assets/img/quick-view/quick-view-1.jpg'%}" alt="">
+                                            </div>
+                                        </div>
+                                        <div class="tab-pane fade" id="nav2" role="tabpanel" aria-labelledby="nav2-tab">
+                                            <div class="product__modal-img w-img">
+                                                <img src="{% static 'assets/img/quick-view/quick-view-2.jpg'%}" alt="">
+                                            </div>
+                                        </div>
+                                        <div class="tab-pane fade" id="nav3" role="tabpanel" aria-labelledby="nav3-tab">
+                                            <div class="product__modal-img w-img">
+                                                <img src="{% static 'assets/img/quick-view/quick-view-3.jpg'%}" alt="">
+                                            </div>
+                                        </div>
+                                        <div class="tab-pane fade" id="nav4" role="tabpanel" aria-labelledby="nav4-tab">
+                                            <div class="product__modal-img w-img">
+                                                <img src="{% static 'assets/img/quick-view/quick-view-4.jpg'%}" alt="">
+                                            </div>
+                                        </div>
+                                        </div>
+                                    <ul class="nav nav-tabs" id="modalTab" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" id="nav1-tab" data-bs-toggle="tab" data-bs-target="#nav1" type="button" role="tab" aria-controls="nav1" aria-selected="true">
+                                                <img src="{% static 'assets/img/quick-view/quick-nav-1.jpg'%}" alt="">
+                                            </button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="nav2-tab" data-bs-toggle="tab" data-bs-target="#nav2" type="button" role="tab" aria-controls="nav2" aria-selected="false">
+                                            <img src="{% static 'assets/img/quick-view/quick-nav-2.jpg'%}" alt="">
+                                            </button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="nav3-tab" data-bs-toggle="tab" data-bs-target="#nav3" type="button" role="tab" aria-controls="nav3" aria-selected="false">
+                                            <img src="{% static 'assets/img/quick-view/quick-nav-3.jpg'%}" alt="">
+                                            </button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="nav4-tab" data-bs-toggle="tab" data-bs-target="#nav4" type="button" role="tab" aria-controls="nav4" aria-selected="false">
+                                            <img src="{% static 'assets/img/quick-view/quick-nav-4.jpg'%}" alt="">
+                                            </button>
+                                        </li>
+                                        </ul>
+                                </div>
+                            </div>
+                            <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                                <div class="product__modal-content">
+                                    <h4><a href="{% url 'product-details' %}">Samsung C49J89: £875, Debenhams Plus</a></h4>
+                                    <div class="product__review d-sm-flex">
+                                        <div class="rating rating__shop mb-10 mr-30">
+                                        <ul>
+                                            <li><a href="#"><i class="fal fa-star"></i></a></li>
+                                            <li><a href="#"><i class="fal fa-star"></i></a></li>
+                                            <li><a href="#"><i class="fal fa-star"></i></a></li>
+                                            <li><a href="#"><i class="fal fa-star"></i></a></li>
+                                            <li><a href="#"><i class="fal fa-star"></i></a></li>
+                                        </ul>
+                                        </div>
+                                        <div class="product__add-review mb-15">
+                                        <span>01 review</span>
+                                        </div>
+                                    </div>
+                                    <div class="product__price">
+                                        <span>$109.00 – $307.00</span>
+                                    </div>
+                                    <div class="product__modal-des mt-20 mb-15">
+                                        <ul>
+                                            <li><a href="#"><i class="fas fa-circle"></i> Bass and Stereo Sound.</a></li>
+                                            <li><a href="#"><i class="fas fa-circle"></i> Display with 3088 x 1440 pixels resolution.</a></li>
+                                            <li><a href="#"><i class="fas fa-circle"></i> Memory, Storage & SIM: 12GB RAM, 256GB.</a></li>
+                                            <li><a href="#"><i class="fas fa-circle"></i> Androi v10.0 Operating system.</a></li>
+                                        </ul>
+                                    </div>
+                                    <div class="product__stock mb-20">
+                                        <span class="mr-10">Availability :</span>
+                                        <span>1795 in stock</span>
+                                    </div>
+                                    <div class="product__modal-form">
+                                        <form action="#">
+                                        <div class="pro-quan-area d-lg-flex align-items-center">
+                                            <div class="product-quantity mr-20 mb-25">
+                                                <div class="cart-plus-minus p-relative"><input type="text" value="1" /></div>
+                                            </div>
+                                            <div class="pro-cart-btn mb-25">
+                                                <button class="cart-btn" type="submit">Add to cart</button>
+                                            </div>
+                                        </div>
+                                        </form>
+                                    </div>
+                                    <div class="product__stock mb-30">
+                                        <ul>
+                                            <li><a href="#">
+                                                <span class="sku mr-10">SKU:</span>
+                                                <span>Samsung C49J89: £875, Debenhams Plus</span></a>
+                                            </li>
+                                            <li><a href="#">
+                                                <span class="cat mr-10">Categories:</span>
+                                                <span>iPhone, Tablets</span></a>
+                                            </li>
+                                            <li><a href="#">
+                                                <span class="tag mr-10">Tags:</span>
+                                                <span>Smartphone, Tablets</span></a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- shop modal end -->
+
+        <script>
+        // Quantity control buttons on product details page
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.qty-control').forEach(control => {
+                const input = control.querySelector('.qty-input');
+                const min = parseInt(input.getAttribute('min')) || 1;
+                const max = parseInt(input.getAttribute('max')) || parseInt(control.dataset.max) || 999;
+
+                control.querySelectorAll('.qty-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const step = parseInt(btn.dataset.step || '1');
+                        let value = parseInt(input.value) || min;
+                        value = Math.min(max, Math.max(min, value + step));
+                        input.value = value;
+                    });
+                });
+
+                input.addEventListener('input', () => {
+                    let value = parseInt(input.value) || min;
+                    value = Math.min(max, Math.max(min, value));
+                    input.value = value;
+                });
+            });
+        });
+
+        // Wishlist functionality for product details
+        function getCsrfTokenPd() {
+            const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+            return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
+        }
+
+        async function handlePdWishlistClick(button) {
+            if (!button) return;
+            const loggedIn = button.dataset.loggedIn === '1';
+            const productId = button.dataset.productId;
+
+            if (!loggedIn) {
+                window.location.href = "{% url 'login' %}?next={{ request.path }}";
+                return;
+            }
+
+            if (!productId) return;
+
+            const url = `/wishlist/add/${productId}/`;
+            const csrftoken = getCsrfTokenPd();
+
+            button.disabled = true;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                let data = { success: false, message: '' };
+                try { data = await response.json(); } catch (_) {}
+
+                const isAlready = data.message && data.message.toLowerCase().includes('already');
+                if (response.ok && (data.success || isAlready)) {
+                    button.classList.add('wishlisted');
+                    const icon = button.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('fal');
+                        icon.classList.add('fas');
+                    }
+                    const text = button.querySelector('span:last-child');
+                    if (text) text.textContent = 'In wishlist';
+                }
+            } catch (error) {
+                console.error('Wishlist error', error);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        // Compare functionality
+        function compareProduct(productId) {
+            let compareList = JSON.parse(localStorage.getItem('compareList') || '[]');
+            if (!compareList.includes(productId)) {
+                compareList.push(productId);
+                localStorage.setItem('compareList', JSON.stringify(compareList));
+                alert('Product added to compare list! (' + compareList.length + ' products)');
+            } else {
+                alert('Product already in compare list!');
+            }
+        }
+
+        // Share functionality
+        function shareProduct() {
+            if (navigator.share) {
+                navigator.share({
+                    title: '{{ product.name|escapejs }}',
+                    text: 'Check out this product: {{ product.name|escapejs }}',
+                    url: window.location.href
+                }).then(() => {
+                    console.log('Successfully shared');
+                }).catch((error) => {
+                    console.log('Error sharing', error);
+                    fallbackShare();
+                });
+            } else {
+                fallbackShare();
+            }
+        }
+
+        function fallbackShare() {
+            const shareUrl = window.location.href;
+            const shareText = 'Check out {{ product.name|escapejs }}: ';
+            
+            const shareOptions = [
+                { name: 'Facebook', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}` },
+                { name: 'Twitter', url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}` },
+                { name: 'WhatsApp', url: `https://wa.me/?text=${encodeURIComponent(shareText + shareUrl)}` },
+                { name: 'Copy Link', action: 'copy' }
+            ];
+            
+            let shareMenu = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:9999;min-width:250px;">';
+            shareMenu += '<h5 style="margin-bottom:15px;">Share this product</h5>';
+            shareOptions.forEach(option => {
+                if (option.action === 'copy') {
+                    shareMenu += `<button onclick="copyToClipboard('${shareUrl}'); closeShareMenu();" style="display:block;width:100%;padding:10px;margin:5px 0;border:1px solid #ddd;border-radius:5px;cursor:pointer;background:#f8f9fa;">${option.name}</button>`;
+                } else {
+                    shareMenu += `<a href="${option.url}" target="_blank" style="display:block;padding:10px;margin:5px 0;border:1px solid #ddd;border-radius:5px;text-decoration:none;color:#333;background:#f8f9fa;">${option.name}</a>`;
+                }
+            });
+            shareMenu += '<button onclick="closeShareMenu()" style="display:block;width:100%;padding:10px;margin-top:10px;border:1px solid #ddd;border-radius:5px;cursor:pointer;background:#e9ecef;">Close</button>';
+            shareMenu += '</div>';
+            shareMenu += '<div id="shareOverlay" onclick="closeShareMenu()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;"></div>';
+            
+            const shareDiv = document.createElement('div');
+            shareDiv.id = 'shareMenu';
+            shareDiv.innerHTML = shareMenu;
+            document.body.appendChild(shareDiv);
+        }
+
+        function closeShareMenu() {
+            const shareMenu = document.getElementById('shareMenu');
+            if (shareMenu) {
+                shareMenu.remove();
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Link copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+            });
+        }
+        </script>
+        
+        {%endblock content %}

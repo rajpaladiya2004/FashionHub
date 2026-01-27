@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+
+{% block title %}Cart-FashionHub{% endblock %}
+
+{% block content %}
+
+
+
+ <main>
+        <!-- page-banner-area-start -->
+        <div class="page-banner-area page-banner-height-2" data-background="{% static 'assets/img/banner/page-banner-4.jpg'%}">
+            <div class="container">
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="page-banner-content text-center">
+                            <h4 class="breadcrumb-title">Your Cart</h4>
+                            <div class="breadcrumb-two">
+                                <nav>
+                                   <nav class="breadcrumb-trail breadcrumbs">
+                                      <ul class="breadcrumb-menu">
+                                         <li class="breadcrumb-trail">
+                                            <a href="{% url 'index' %}"><span>Home</span></a>
+                                         </li>
+                                         <li class="trail-item">
+                                            <span>Cart</span>
+                                         </li>
+                                      </ul>
+                                   </nav> 
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- page-banner-area-end -->
+
+        <!-- cart-area-start -->
+        <section class="cart-area pt-120 pb-120">
+            <div class="container">
+                <!-- Messages -->
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show mb-30" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                {% if cart_items %}
+                <div class="row">
+                  <div class="col-12">
+                        <div class="table-content table-responsive">
+                           <table class="table">
+                                 <thead>
+                                    <tr>
+                                       <th class="product-thumbnail">Image</th>
+                                       <th class="cart-product-name">Product</th>
+                                       <th class="product-price">Unit Price</th>
+                                       <th class="product-quantity">Quantity</th>
+                                       <th class="product-subtotal">Total</th>
+                                       <th class="product-remove">Action</th>
+                                    </tr>
+                                 </thead>
+                                 <tbody>
+                                    {% for item in cart_items %}
+                                    <tr>
+                                       <td class="product-thumbnail">
+                                          <a href="#">
+                                              {% if item.product.image %}
+                                                  <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" style="max-width: 80px; height: auto;">
+                                              {% else %}
+                                                  <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ item.product.name }}" style="max-width: 80px; height: auto; background-color: #f0f0f0;">
+                                              {% endif %}
+                                          </a>
+                                       </td>
+                                       <td class="product-name"><a href="#">{{ item.product.name }}</a></td>
+                                       <td class="product-price"><span class="amount">${{ item.product.price }}</span></td>
+                                       <td class="product-quantity">
+                                             <form method="POST" action="{% url 'update_cart_quantity' item.id %}" style="display: inline;">
+                                                {% csrf_token %}
+                                                <div class="d-flex align-items-center gap-2">
+                                                   <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="999" style="width: 60px;">
+                                                   <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                                                </div>
+                                             </form>
+                                       </td>
+                                       <td class="product-subtotal"><span class="amount">${{ item.get_total_price }}</span></td>
+                                       <td class="product-remove">
+                                          <a href="{% url 'remove_from_cart' item.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Remove this item?');">
+                                             <i class="fa fa-times"></i>
+                                          </a>
+                                       </td>
+                                    </tr>
+                                    {% endfor %}
+                                 </tbody>
+                           </table>
+                        </div>
+                        <div class="row mt-40">
+                           <div class="col-12">
+                                 <div class="coupon-all">
+                                    <div class="coupon">
+                                       <input id="coupon_code" class="input-text" name="coupon_code" value="" placeholder="Coupon code" type="text">
+                                       <button class="tp-btn-h1" name="apply_coupon" type="submit">Apply coupon</button>
+                                    </div>
+                                    <div class="coupon2">
+                                       <a class="tp-btn-h2" href="{% url 'shop' %}">Continue Shopping</a>
+                                    </div>
+                                 </div>
+                           </div>
+                        </div>
+                        <div class="row justify-content-end mt-40">
+                           <div class="col-md-5">
+                                 <div class="cart-page-total">
+                                    <h2>Cart Totals</h2>
+                                    <ul class="mb-20">
+                                       <li>Subtotal <span>${{ total_price }}</span></li>
+                                       <li>Total <span>${{ total_price }}</span></li>
+                                    </ul>
+                                    <a class="tp-btn-h1 w-100 text-center" href="{% url 'checkout' %}">Proceed to Checkout</a>
+                                 </div>
+                           </div>
+                        </div>
+                  </div>
+               </div>
+                {% else %}
+                <div class="row">
+                    <div class="col-12 text-center py-5">
+                        <h4 class="mb-30">Your Cart is Empty</h4>
+                        <p class="mb-30">Add some products to your cart to proceed with checkout.</p>
+                        <a href="{% url 'shop' %}" class="tp-btn-h1">Continue Shopping</a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+         </section>
+         <!-- cart-area-end -->
+
+        <!-- cta-area-start -->
+        <section class="cta-area d-ldark-bg pt-55 pb-10">
+            <div class="container">
+                <div class="row">
+                    <div class="col-lg-4 col-md-6">
+                        <div class="cta-item cta-item-d mb-30">
+                            <h5 class="cta-title">Follow Us</h5>
+                            <p>We make consolidating, marketing and tracking your social media website easy.</p>
+                            <div class="cta-social">
+                                <div class="social-icon">
+                                    <a href="#" class="facebook"><i class="fab fa-facebook-f"></i></a>
+                                    <a href="#" class="twitter"><i class="fab fa-twitter"></i></a>
+                                    <a href="#" class="youtube"><i class="fab fa-youtube"></i></a>
+                                    <a href="#" class="linkedin"><i class="fab fa-linkedin-in"></i></a>
+                                    <a href="#" class="rss"><i class="fas fa-rss"></i></a>
+                                    <a href="#" class="dribbble"><i class="fab fa-dribbble"></i></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6">
+                        <div class="cta-item mb-30">
+                            <h5 class="cta-title">Sign Up To Newsletter</h5>
+                            <p>Join 60.000+ subscribers and get a new discount coupon  on every Saturday.</p>
+                            <div class="subscribe__form">
+                                <form action="#">
+                                    <input type="email" placeholder="Enter your email here...">
+                                    <button>subscribe</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6">
+                        <div class="cta-item mb-30">
+                            <h5 class="cta-title">Download App</h5>
+                            <p>DukaMarket App is now available on App Store & Google Play. Get it now.</p>
+                            <div class="cta-apps">
+                                <div class="apps-store">
+                                    <a href="#"><img src="{% static 'assets/img/brand/app_ios.png' %}" alt=""></a>
+                                    <a href="#"><img src="{% static 'assets/img/brand/app_android.png' %}" alt=""></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+{% endblock content %}

@@ -1,0 +1,553 @@
+{% load static %}
+<header class="header d-blue-bg">
+    <div class="header-top">
+        <div class="container">
+            <div class="header-inner">
+                <div class="row align-items-center">
+                    <div class="col-xl-6 col-lg-7">
+                        <div class="header-inner-start">
+                            <div class="header__currency border-right">
+                                <div class="s-name">
+                                    <span>Language: </span>
+                                </div>
+                                <select>
+                                    <option>English</option>
+                                    <option>Deutsch</option>
+                                    <option>Français</option>
+                                    <option>Espanol</option>
+                                </select>
+                            </div>
+                            <div class="header__lang border-right">
+                                <div class="s-name">
+                                    <span>Currency: </span>
+                                </div>
+                                <select>
+                                    <option> USD</option>
+                                    <option>EUR</option>
+                                    <option>INR</option>
+                                    <option>BDT</option>
+                                    <option>BGD</option>
+                                </select>
+                            </div>
+                            <div class="support d-none d-sm-block">
+                                <p>Need Help? <a href="tel:+001123456789">+001 123 456 789</a></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6 col-lg-5 d-none d-lg-block">
+                        <div class="header-inner-end text-md-end">
+                            <div class="ovic-menu-wrapper">
+                                <ul>
+                                    <li><a href="{% url 'about' %}">About Us</a></li>
+                                    <li><a href="{% url 'contact' %}">Order Tracking</a></li>
+                                    <li><a href="{% url 'contact' %}">Contact Us</a></li>
+                                    <li><a href="{% url 'faq' %}">FAQs</a></li>
+                                    {% if user.is_authenticated %}
+                                        <li><a href="{% url 'logout' %}">Logout</a></li>
+                                        {% endif %}
+
+                                </ul>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="header-mid">
+        <div class="container">
+            <div class="heade-mid-inner">
+                <div class="row align-items-center">
+                    <div class="col-xl-3 col-lg-3 col-md-4 col-sm-4">
+                        <div class="header__info">
+                            <div class="logo">
+                                <a href="{% url 'index' %}" class="logo-image"><h1 style="color: white;">FashionHub</h1></a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-5 col-lg-4 d-none d-lg-block">
+                        <div class="header__search">
+                            <form action="#">
+                                <div class="header__search-box">
+                                    <input class="search-input" type="text" placeholder="I'm shopping for...">
+                                    <button class="button" type="submit"><i class="far fa-search"></i></button>
+                                </div>
+                                <div class="header__search-cat">
+                                    <select>
+                                        <option>All Categories</option>
+                                        <option>Best Seller Products</option>
+                                        <option>Top 10 Offers</option>
+                                        <option>New Arrivals</option>
+                                        <option>Phones &amp; Tablets</option>
+                                        <option>Electronics &amp; Digital</option>
+                                        <option>Fashion &amp; Clothings</option>
+                                        <option>Jewelry &amp; Watches</option>
+                                        <option>Health &amp; Beauty</option>
+                                        <option>Sound &amp; Speakers</option>
+                                        <option>TV &amp; Audio</option>
+                                        <option>Computers</option>
+                                    </select>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-xl-4 col-lg-5 col-md-8 col-sm-8">
+                        <div class="header-action">
+                    <div class="block-userlink">
+                            {% if user.is_authenticated %}
+                                <a class="icon-link" href="{% url 'profile' %}">
+                                    <i class="flaticon-user"></i>
+                                    <span class="text">
+                                        <span class="sub">{{ user.username }}</span>
+                                        My Account
+                                    </span>
+                                </a>
+                            {% else %}
+                                <a class="icon-link" href="{% url 'login' %}">
+                                    <i class="flaticon-user"></i>
+                                    <span class="text">
+                                        <span class="sub">Login</span>
+                                        My Account
+                                    </span>
+                                </a>
+                            {% endif %}
+                    </div>
+
+                    {% if user.username == 'FashionHub' %}
+                    <div class="block-userlink">
+                        <a class="icon-link" href="{% url 'add_product' %}" style="background-color: #fcbe00; padding: 10px 20px; border-radius: 5px; color: #1a1a1a; font-weight: 600; text-decoration: none; display: inline-block; margin-left: 10px;">
+                            <i class="flaticon-add" style="margin-right: 5px;"></i>
+                            <span class="text" style="color: #1a1a1a;">
+                                <span class="sub" style="color: #1a1a1a;">Admin</span>
+                                Add Product
+                            </span>
+                        </a>
+                    </div>
+                    {% endif %}
+
+                            <div class="block-wishlist action">
+                                <a class="icon-link" href="{% url 'wishlist' %}">
+                                <i class="flaticon-heart"></i>
+                                <span class="count">0</span>
+                                <span class="text">
+                                <span class="sub">Favorite</span>
+                                My Wishlist </span>
+                                </a>
+                            </div>
+                            <div class="block-cart action">
+                                <a class="icon-link" href="{% url 'cart' %}">
+                                <i class="flaticon-shopping-bag"></i>
+                                <span class="count">{{ cart_count }}</span>
+                                <span class="text">
+                                <span class="sub">Your Cart:</span>
+                                ${{ cart_total|default:"0.00" }} </span>
+                                </a>
+                                <div class="cart">
+                                    <div class="cart__mini">
+                                        <ul>
+                                            <li>
+                                                <div class="cart__title">
+                                                    <h4>Your Cart</h4>
+                                                    <span>({{ cart_count }} Item{% if cart_count != 1 %}s{% endif %} in Cart)</span>
+                                                </div>
+                                            </li>
+                                            {% if cart_items %}
+                                                {% for item in cart_items %}
+                                                <li>
+                                                    <div class="cart__item d-flex justify-content-between align-items-center">
+                                                        <div class="cart__inner d-flex">
+                                                            <div class="cart__thumb">
+                                                                <a href="{% url 'product-details' item.product.id %}">
+                                                                    {% if item.product.image %}
+                                                                        <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" style="max-width: 60px; height: auto;">
+                                                                    {% else %}
+                                                                        <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ item.product.name }}" style="max-width: 60px; height: auto; background-color: #f0f0f0;">
+                                                                    {% endif %}
+                                                                </a>
+                                                            </div>
+                                                            <div class="cart__details">
+                                                                <h6><a href="{% url 'product-details' item.product.id %}">{{ item.product.name }} x{{ item.quantity }}</a></h6>
+                                                                <div class="cart__price">
+                                                                    <span>${{ item.get_total_price }}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="cart__del">
+                                                            <a href="{% url 'remove_from_cart' item.id %}"><i class="fal fa-times"></i></a>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                                {% endfor %}
+                                            {% else %}
+                                                <li>
+                                                    <div class="cart__item">
+                                                        <p style="text-align: center; padding: 15px; color: #999;">Your cart is empty</p>
+                                                    </div>
+                                                </li>
+                                            {% endif %}
+                                            <li>
+                                                <div class="cart__sub d-flex justify-content-between align-items-center">
+                                                    <h6>Subtotal</h6>
+                                                    <span class="cart__sub-total">${{ cart_total|default:"0.00" }}</span>
+                                                </div>
+                                            </li>
+                                            <li>
+                                        <a href="{% url 'cart' %}" class="wc-cart mb-10">View cart</a>
+                                                <a href="{% url 'checkout' %}" class="wc-checkout">Checkout</a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="header__bottom">
+        <div class="container">
+            <div class="row g-0 align-items-center">
+                <div class="col-lg-3">                       
+                    <div class="cat__menu-wrapper side-border d-none d-lg-block">
+                        <div class="cat-toggle">
+                            <button type="button" class="cat-toggle-btn cat-toggle-btn-1"><i class="fal fa-bars"></i> Shop by department</button>
+                            <div class="cat__menu">
+                                <nav id="mobile-menu" style="display: block;">
+                                    <ul>
+                                        <li>
+                                            <a href="{% url 'shop' %}">All Categories <i class="far fa-angle-down"></i></a>
+                                            <ul class="mega-menu">
+                                                <li><a href="{% url 'shop' %}">Shop Pages</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Standard SHop Page</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop Right Sidebar</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop Left Sidebar</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop 3 Column</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop 4 Column</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Product Pages</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Product Details</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Product V2</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Product V3</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Varriable Product</a></li>
+                                                        <li><a href="{% url 'product-details' %}">External Product</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Other Pages</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">wishlist</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shopping Cart</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Checkout</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Login</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Register</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                    </ul>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                        <li>
+                                            <a href="{% url 'shop' %}">Phone and Electronics <i class="far fa-angle-down"></i></a>
+                                            <ul class="mega-menu mega-menu-2">
+                                                <li><a href="{% url 'shop' %}">Shop Pages</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Standard SHop Page</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop Right Sidebar</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop Left Sidebar</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop 3 Column</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shop 4 Column</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Product Pages</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Product Details</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Product V2</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Product V3</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Varriable Product</a></li>
+                                                        <li><a href="{% url 'product-details' %}">External Product</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Other Pages</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">wishlist</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Shopping Cart</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Checkout</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Login</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Register</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                    <ul class="mega-item">
+                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                    </ul>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                        <li>
+                                            <a href="{% url 'shop' %}">Best Seller Products
+                                                <span class="cat-label">hot!</span>
+                                                <i class="far fa-angle-down"></i>
+                                            </a>
+                                            <ul class="mega-menu">
+                                                <li><a href="{% url 'shop' %}">Shop Pages</a>
+                                                     <ul class="mega-item">
+                                                         <li><a href="{% url 'product-details' %}">Standard SHop Page</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Shop Right Sidebar</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Shop Left Sidebar</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Shop 3 Column</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Shop 4 Column</a></li>
+                                                     </ul>
+                                                 </li>
+                                                 <li><a href="{% url 'shop' %}">Product Pages</a>
+                                                     <ul class="mega-item">
+                                                         <li><a href="{% url 'product-details' %}">Product Details</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Product V2</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Product V3</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Varriable Product</a></li>
+                                                         <li><a href="{% url 'product-details' %}">External Product</a></li>
+                                                     </ul>
+                                                 </li>
+                                                 <li><a href="{% url 'shop' %}">Other Pages</a>
+                                                     <ul class="mega-item">
+                                                         <li><a href="{% url 'product-details' %}">wishlist</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Shopping Cart</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Checkout</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Login</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Register</a></li>
+                                                     </ul>
+                                                 </li>
+                                                 <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                     <ul class="mega-item">
+                                                         <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                     </ul>
+                                                 </li>
+                                                 <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                     <ul class="mega-item">
+                                                         <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                     </ul>
+                                                 </li>
+                                                 <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
+                                                     <ul class="mega-item">
+                                                         <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
+                                                         <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
+                                                     </ul>
+                                                 </li>
+                                            </ul>
+                                        </li>
+                                        <li>
+                                            <a href="{% url 'shop' %}">Top 10 Offers
+                                                <span class="cat-label green">new!</span>
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a href="{% url 'shop' %}">New Arrivals <i class="far fa-angle-down"></i></a>
+                                            <ul class="submenu">
+                                                <li><a href="{% url 'shop' %}">Home Appliances</a></li>
+                                                <li><a href="{% url 'shop' %}">Technology</a>
+                                                    <ul class="submenu">
+                                                        <li><a href="{% url 'shop' %}">Storage Devices</a></li>
+                                                        <li><a href="{% url 'shop' %}">Monitors</a></li>
+                                                        <li><a href="{% url 'shop' %}">Laptops</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="{% url 'shop' %}">Office Equipments</a></li>
+                                            </ul>
+                                        </li>
+                                        <li><a href="{% url 'shop' %}">TV &amp; Audio</a></li>
+                                        <li><a href="{% url 'shop' %}">Electronics &amp; Digital</a></li>
+                                        <li class="d-laptop-none"><a href="{% url 'shop' %}">Fashion &amp; Clothings</a></li>
+                                        <li class="d-laptop-none"><a href="{% url 'shop' %}">Jewelry &amp; Watches</a></li>
+                                        <li><a href="{% url 'shop' %}">Health &amp; Beauty</a></li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 col-md-6 col-3">
+                    <div class="header__bottom-left d-flex d-xl-block align-items-center">
+                        <div class="side-menu d-lg-none mr-20">
+                            <button type="button" class="side-menu-btn offcanvas-toggle-btn"><i class="fas fa-bars"></i></button>
+                        </div>
+                        <div class="main-menu d-none d-lg-block">
+                            <nav>
+                                <ul>
+                                    <li>
+                                        <a href="{% url 'index' %}" class="active">Home </a>
+                                    </li>
+                                    <li><a href="{% url 'about' %}">About Us</a></li>
+                                    <li class="has-mega"><a href="{% url 'shop' %}">Shop <i class="far fa-angle-down"></i></a>
+                                        <div class="mega-menu">
+                                            <div class="container container-mega">
+                                                <ul>
+                                                    <li>
+                                                        <ul>
+                                                        <li class="title"><a href="{% url 'shop' %}">SHOP LAYOUT</a></li>
+                                                        <li><a href="{% url 'shop' %}">Pagination</a></li>
+                                                        <li><a href="{% url 'shop' %}">Ajax Load More</a></li>
+                                                        <li><a href="{% url 'shop' %}">Infinite Scroll</a></li>
+                                                        <li><a href="{% url 'shop' %}">Sidebar Right</a></li>
+                                                        <li><a href="{% url 'shop' %}">Sidebar Left</a></li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <ul>
+                                                        <li class="title"><a href="{% url 'shop' %}">SHOP PAGES</a></li>
+                                                        <li><a href="{% url 'shop' %}">List View</a></li>
+                                                        <li><a href="{% url 'shop' %}">Small Products</a></li>
+                                                        <li><a href="{% url 'shop' %}">Large Products</a></li>
+                                                        <li><a href="{% url 'shop' %}">Shop — 3 Items</a></li>
+                                                        <li><a href="{% url 'shop' %}">Shop — 4 Items</a></li>
+                                                        <li><a href="{% url 'shop' %}">Shop — 5 Items</a></li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <ul>
+                                                        <li class="title"><a href="{% url 'shop' %}">PRODUCT LAYOUT</a></li>
+                                                        <li><a href="{% url 'shop' %}">Description Sticky</a></li>
+                                                        <li><a href="{% url 'shop' %}">Product Carousel</a></li>
+                                                        <li><a href="{% url 'shop' %}">Gallery Modern</a></li>
+                                                        <li><a href="{% url 'shop' %}">Thumbnail Left</a></li>
+                                                        <li><a href="{% url 'shop' %}">Thumbnail Right</a></li>
+                                                        <li><a href="{% url 'shop' %}">Thumbnail Botttom</a></li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <ul>
+                                                        <li class="title"><a href="{% url 'shop' %}">Basketball</a></li>
+                                                        <li><a href="{% url 'shop' %}">East Hampton Fleece</a></li>
+                                                        <li><a href="{% url 'shop' %}">Faxon Canvas Low</a></li>
+                                                        <li><a href="{% url 'shop' %}">Habitasse Dictumst</a></li>
+                                                        <li><a href="{% url 'shop' %}">Kaoreet Lobortis</a></li>
+                                                        <li><a href="{% url 'shop' %}">NikeCourt Zoom</a></li>
+                                                        <li><a href="{% url 'shop' %}">NikeCourts Air Zoom</a></li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <ul>
+                                                        <li class="title"><a href="{% url 'shop' %}">Basketball</a></li>
+                                                        <li><a href="{% url 'shop' %}">East Hampton Fleece</a></li>
+                                                        <li><a href="{% url 'shop' %}">Faxon Canvas Low</a></li>
+                                                        <li><a href="{% url 'shop' %}">Habitasse Dictumst</a></li>
+                                                        <li><a href="{% url 'shop' %}">Kaoreet Lobortis</a></li>
+                                                        <li><a href="{% url 'shop' %}">NikeCourt Zoom</a></li>
+                                                        <li><a href="{% url 'shop' %}">NikeCourts Air Zoom</a></li>
+                                                        </ul>
+                                                    </li>
+                                                    <li class="mega-image hover-effect" style="background-image: url({% static 'assets/img/bg/menu-item.jpg' %});"> 
+                                                        <ul>
+                                                            <li><a href="{% url 'shop' %}">
+                                                                <h4>Top Cameras <br> Bestseller Products</h4>
+                                                                <h5>4K</h5>
+                                                                <h6>Sale Up To <span>60% Off</span></h6>
+                                                            </a></li>
+                                                        </ul>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <div class="offer mt-40">
+                                                <p><b>30% OFF</b> the shipping of your first order with the code: <b>DUKA-SALE30</b></p>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <li><a href="{% url 'blog' %}">Blog <i class="far fa-angle-down"></i></a>
+                                        <ul class="submenu">
+                                            <li><a href="{% url 'blog' %}">Blog</a></li>
+                                            <li><a href="{% url 'blog-details' %}">Blog Details</a></li>
+                                        </ul>
+                                    </li>
+                                    <li>
+                                        <a href="{% url 'about' %}">Pages <i class="far fa-angle-down"></i></a>
+                                        <ul class="submenu">
+                                            <li><a href="{% url 'profile' %}">My Account</a></li>
+                                            {% if user.username == 'FashionHub' %}
+                                            <li><a href="{% url 'add_product' %}" style="color: #fcbe00; font-weight: 600;">➕ Add Product</a></li>
+                                            {% endif %}
+                                            <li><a href="{% url 'product-details' %}">Product Details</a></li>
+                                            <li><a href="{% url 'faq' %}">FAQs pages</a></li>
+                                            <li><a href="{% url 'cart' %}">Cart</a></li>
+                                            <li><a href="{% url 'wishlist' %}">Wishlist</a></li>
+                                            <li><a href="{% url 'checkout' %}">Checkout</a></li>
+                                            <li><a href="{% url 'contact' %}">Contact Us</a></li>
+                                            <li><a href="{% url '404' %}">404 Error</a></li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 col-9">
+                    <div class="shopeing-text text-sm-end">
+                        <p>Spend $120 more and get free shipping!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="offcanvas__area">
+        <div class="offcanvas__wrapper">
+        <div class="offcanvas__close">
+            <button class="offcanvas__close-btn" id="offcanvas__close-btn">
+                <i class="fal fa-times"></i>
+            </button>
+        </div>
+        <div class="offcanvas__content">
+            <div class="offcanvas__logo mb-40">
+                <a href="{% url 'index' %}">
+                <img src="{% static 'assets/img/logo/logo-white.png' %}" alt="logo">
+                </a>
+            </div>
+            <div class="offcanvas__search mb-25">
+                <form action="#">
+                    <input type="text" placeholder="What are you searching for?">
+                    <button type="submit" ><i class="far fa-search"></i></button>
+                </form>
+            </div>
+            <div class="mobile-menu fix"></div>
+            <div class="offcanvas__action">
+
+            </div>
+        </div>
+        </div>
+    </div>
+    <div class="body-overlay"></div>
