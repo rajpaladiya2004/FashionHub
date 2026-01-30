@@ -1,9 +1,40 @@
 # admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Slider, Feature, Banner, Product, ProductImage, DealCountdown, Cart, Wishlist, ProductReview
+from .models import CategoryIcon, Slider, Feature, Banner, Product, ProductImage, DealCountdown, Cart, Wishlist, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings
 
 admin.site.register(Slider)
+
+@admin.register(CategoryIcon)
+class CategoryIconAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category_key', 'icon_preview', 'order', 'is_active')
+    list_editable = ('order', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'category_key')
+    
+    fieldsets = (
+        ('📋 BASIC INFO', {
+            'fields': ('name', 'category_key'),
+            'description': 'Category name and key (must match Product category choices)'
+        }),
+        ('🎨 ICON & STYLING', {
+            'fields': ('icon_class', 'icon_color', 'background_gradient'),
+            'description': 'FontAwesome icon class, icon color, and background gradient'
+        }),
+        ('⚙️ SETTINGS', {
+            'fields': ('order', 'is_active'),
+            'description': 'Display order and active status'
+        }),
+    )
+    
+    def icon_preview(self, obj):
+        return format_html(
+            '<div style="display: inline-block; background: {}; padding: 10px; border-radius: 8px;"><i class="{}" style="font-size: 20px; color: {};"></i></div>',
+            obj.background_gradient,
+            obj.icon_class,
+            obj.icon_color
+        )
+    icon_preview.short_description = 'Icon Preview'
 
 @admin.register(Feature)
 class FeatureAdmin(admin.ModelAdmin):
@@ -12,8 +43,48 @@ class FeatureAdmin(admin.ModelAdmin):
 
 @admin.register(Banner)
 class BannerAdmin(admin.ModelAdmin):
-    list_display = ('title', 'order', 'is_active')
+    list_display = ('title', 'banner_type', 'button_text', 'order', 'is_active', 'image_thumbnail')
     list_editable = ('order', 'is_active')
+    list_filter = ('banner_type', 'is_active', 'button_style')
+    search_fields = ('title', 'subtitle', 'badge_text')
+    readonly_fields = ('image_preview',)
+    
+    fieldsets = (
+        ('📋 BASIC INFO', {
+            'fields': ('title', 'subtitle', 'badge_text', 'banner_type'),
+            'description': 'Banner title, subtitle, and badge text'
+        }),
+        ('🖼️ IMAGE', {
+            'fields': ('image', 'image_preview', 'background_color'),
+            'description': 'Upload banner image and set background color overlay (optional)'
+        }),
+        ('🔗 LINK & ACTION', {
+            'fields': ('link_url', 'button_text', 'button_style'),
+            'description': 'Set link URL and button configuration'
+        }),
+        ('⚙️ SETTINGS', {
+            'fields': ('order', 'is_active'),
+            'description': 'Display order and active status'
+        }),
+    )
+    
+    def image_thumbnail(self, obj):
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="width: 80px; height: 50px; border-radius: 5px; object-fit: cover;" />',
+                obj.image.url
+            )
+        return '-'
+    image_thumbnail.short_description = 'Preview'
+    
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="max-width: 400px; height: auto; border-radius: 8px; border: 1px solid #ddd; padding: 10px;" />',
+                obj.image.url
+            )
+        return 'No image uploaded yet'
+    image_preview.short_description = 'Full Preview'
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
@@ -34,8 +105,8 @@ class ProductAdmin(admin.ModelAdmin):
             'description': 'Upload a product image (JPEG/PNG, recommended size: 400x400px)'
         }),
         ('DESCRIPTION & DETAILS', {
-            'fields': ('description', 'tags'),
-            'description': 'Product description and tags (comma-separated)'
+            'fields': ('description', 'descriptionImage', 'tags'),
+            'description': 'Product description, large description image, and tags (comma-separated)'
         }),
         ('PRICING', {
             'fields': ('price', 'old_price', 'discount_percent'),
@@ -113,45 +184,6 @@ class DealCountdownAdmin(admin.ModelAdmin):
     list_editable = ('is_active',)
 
 
-@admin.register(ProductReview)
-class ProductReviewAdmin(admin.ModelAdmin):
-    list_display = ('id', 'product', 'user', 'rating', 'name', 'is_approved', 'created_at', 'comment_preview')
-    list_filter = ('is_approved', 'rating', 'created_at')
-    list_editable = ('is_approved',)
-    search_fields = ('product__name', 'user__username', 'name', 'email', 'comment')
-    readonly_fields = ('created_at', 'updated_at')
-    actions = ['approve_reviews', 'reject_reviews']
-    
-    fieldsets = (
-        ('Review Information', {
-            'fields': ('product', 'user', 'rating', 'name', 'email')
-        }),
-        ('Review Content', {
-            'fields': ('comment',)
-        }),
-        ('Approval Status', {
-            'fields': ('is_approved', 'created_at', 'updated_at'),
-            'description': 'Check "Approved" to make this review publicly visible'
-        }),
-    )
-    
-    def comment_preview(self, obj):
-        if len(obj.comment) > 50:
-            return obj.comment[:50] + '...'
-        return obj.comment
-    comment_preview.short_description = 'Comment Preview'
-    
-    def approve_reviews(self, request, queryset):
-        updated = queryset.update(is_approved=True)
-        self.message_user(request, f'{updated} review(s) successfully approved.')
-    approve_reviews.short_description = 'Approve selected reviews'
-    
-    def reject_reviews(self, request, queryset):
-        updated = queryset.update(is_approved=False)
-        self.message_user(request, f'{updated} review(s) rejected.')
-    reject_reviews.short_description = 'Reject selected reviews'
-
-
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'product', 'quantity', 'added_at')
@@ -165,3 +197,203 @@ class WishlistAdmin(admin.ModelAdmin):
     list_filter = ('user', 'added_at')
     search_fields = ('user__username', 'product__name')
     readonly_fields = ('added_at',)
+
+
+class ReviewImageInline(admin.TabularInline):
+    model = ReviewImage
+    extra = 1
+    max_num = 5
+
+@admin.register(ProductReview)
+class ProductReviewAdmin(admin.ModelAdmin):
+    list_display = ('id', 'product', 'user', 'rating', 'is_approved', 'is_verified_purchase', 'helpful_count', 'created_at')
+    list_filter = ('is_approved', 'is_verified_purchase', 'rating', 'created_at')
+    search_fields = ('product__name', 'user__username', 'comment')
+    readonly_fields = ('created_at', 'updated_at', 'helpful_count', 'not_helpful_count')
+    inlines = [ReviewImageInline]
+    list_editable = ('is_approved', 'is_verified_purchase')
+
+@admin.register(ReviewVote)
+class ReviewVoteAdmin(admin.ModelAdmin):
+    list_display = ('id', 'review', 'user', 'is_helpful', 'created_at')
+    list_filter = ('is_helpful', 'created_at')
+    search_fields = ('review__product__name', 'user__username')
+
+@admin.register(ProductQuestion)
+class ProductQuestionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'product', 'user', 'question_preview', 'is_answered', 'is_approved', 'created_at')
+    list_filter = ('is_answered', 'is_approved', 'created_at')
+    search_fields = ('product__name', 'user__username', 'question', 'answer')
+    readonly_fields = ('created_at', 'user', 'product')
+    list_editable = ('is_approved',)
+    actions = ['mark_as_answered_and_approved']
+    
+    fieldsets = (
+        ('Question Info', {
+            'fields': ('product', 'user', 'question', 'created_at')
+        }),
+        ('Answer (Required)', {
+            'fields': ('answer', 'answered_by', 'answered_at', 'is_answered'),
+            'description': 'Answer the question and mark as answered. It will be visible on the product page once approved.'
+        }),
+        ('Approval', {
+            'fields': ('is_approved',),
+            'description': 'Approve to show Q&A on product page'
+        }),
+    )
+    
+    def question_preview(self, obj):
+        return obj.question[:50] + '...' if len(obj.question) > 50 else obj.question
+    question_preview.short_description = 'Question'
+    
+    def mark_as_answered_and_approved(self, request, queryset):
+        """Mark selected questions as answered and approved"""
+        from django.utils import timezone
+        updated = queryset.update(
+            is_answered=True,
+            is_approved=True,
+            answered_by=request.user,
+            answered_at=timezone.now()
+        )
+        self.message_user(request, f'{updated} question(s) marked as answered and approved.')
+    mark_as_answered_and_approved.short_description = 'Mark as Answered & Approved'
+
+
+# ===== ORDER & ORDERITEM ADMIN =====
+
+class OrderItemInline(admin.TabularInline):
+    """Inline Order Items display in Order admin"""
+    model = OrderItem
+    extra = 0
+    readonly_fields = ('product_name', 'product_price', 'quantity', 'subtotal', 'created_at')
+    fields = ('product_name', 'product_price', 'quantity', 'subtotal')
+    can_delete = False
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    """Order Management in Admin Panel"""
+    list_display = ('order_number', 'user_name', 'total_amount', 'payment_status_badge', 'order_status_badge', 'payment_method', 'is_resell_badge', 'created_at')
+    list_filter = ('order_status', 'payment_status', 'payment_method', 'is_resell', 'created_at')
+    search_fields = ('order_number', 'user__username', 'user__email')
+    readonly_fields = ('order_number', 'created_at', 'updated_at', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature')
+    date_hierarchy = 'created_at'
+    inlines = [OrderItemInline]
+    
+    fieldsets = (
+        ('📋 ORDER INFO', {
+            'fields': ('order_number', 'user', 'created_at', 'updated_at')
+        }),
+        ('💰 PAYMENT DETAILS', {
+            'fields': ('subtotal', 'tax', 'shipping_cost', 'total_amount', 'payment_method', 'payment_status', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature')
+        }),
+        ('📦 ORDER STATUS', {
+            'fields': ('order_status', 'tracking_number', 'delivery_date')
+        }),
+        ('📍 ADDRESSES', {
+            'fields': ('shipping_address', 'billing_address')
+        }),
+        ('📝 NOTES', {
+            'fields': ('customer_notes',)
+        }),
+        ('🔄 RESELL', {
+            'fields': ('is_resell',)
+        }),
+    )
+    
+    def user_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+    user_name.short_description = 'Customer'
+    
+    def payment_status_badge(self, obj):
+        colors = {
+            'PENDING': '#ff9800',
+            'PAID': '#4caf50',
+            'FAILED': '#f44336',
+            'REFUNDED': '#2196f3',
+        }
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 3px;">{}</span>',
+            colors.get(obj.payment_status, '#999'),
+            obj.get_payment_status_color()
+        )
+    payment_status_badge.short_description = 'Payment Status'
+    
+    def order_status_badge(self, obj):
+        colors = {
+            'PENDING': '#ff9800',
+            'PROCESSING': '#2196f3',
+            'SHIPPED': '#9c27b0',
+            'DELIVERED': '#4caf50',
+            'CANCELLED': '#f44336',
+        }
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 3px;">{}</span>',
+            colors.get(obj.order_status, '#999'),
+            obj.order_status
+        )
+    order_status_badge.short_description = 'Order Status'
+    
+    def is_resell_badge(self, obj):
+        if obj.is_resell:
+            return format_html('<span style="background-color: #2196f3; color: white; padding: 5px 10px; border-radius: 3px;">🔄 RESELL</span>')
+        return '—'
+    is_resell_badge.short_description = 'Type'
+
+
+@admin.register(OrderItem)
+class OrderItemAdmin(admin.ModelAdmin):
+    """OrderItem Management in Admin Panel"""
+    list_display = ('order_number', 'product_name', 'quantity', 'product_price', 'subtotal')
+    list_filter = ('created_at', 'order__payment_status')
+    search_fields = ('order__order_number', 'product_name')
+    readonly_fields = ('product_name', 'product_price', 'product_image', 'subtotal', 'created_at')
+    
+    fieldsets = (
+        ('📦 ORDER INFO', {
+            'fields': ('order', 'product')
+        }),
+        ('📋 PRODUCT DETAILS', {
+            'fields': ('product_name', 'product_price', 'product_image')
+        }),
+        ('🔢 QUANTITY & PRICING', {
+            'fields': ('quantity', 'size', 'color', 'subtotal')
+        }),
+        ('📅 TIMESTAMP', {
+            'fields': ('created_at',)
+        }),
+    )
+    
+    def order_number(self, obj):
+        return obj.order.order_number
+    order_number.short_description = 'Order #'
+    
+    def product_image(self, obj):
+        if obj.product_image:
+            return format_html(
+                '<img src="{}" style="max-width: 100px; height: auto; border-radius: 5px;" />',
+                obj.product_image
+            )
+        return '—'
+    product_image.short_description = 'Image'
+
+
+@admin.register(OrderStatusHistory)
+class OrderStatusHistoryAdmin(admin.ModelAdmin):
+    list_display = ('order', 'old_status', 'new_status', 'changed_by', 'created_at')
+    list_filter = ('new_status', 'created_at')
+    search_fields = ('order__order_number', 'notes')
+    date_hierarchy = 'created_at'
+    
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(AdminEmailSettings)
+class AdminEmailSettingsAdmin(admin.ModelAdmin):
+    list_display = ('setting_name', 'admin_email', 'is_active', 'updated_at')
+    list_editable = ('admin_email', 'is_active')
+    
+    def has_add_permission(self, request):
+        # Only allow one admin email setting
+        return AdminEmailSettings.objects.count() == 0

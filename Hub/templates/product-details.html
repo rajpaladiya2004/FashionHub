@@ -1,7 +1,7 @@
-{% extends "base.html" %}
-
+﻿{% extends "base.html" %}
 
 {% load static %}
+{% load hub_filters %}
 
 
 {% block title %}ProdductDetails - FashionHub{% endblock %}
@@ -25,6 +25,99 @@
     .action-chip.wishlisted .icon { background: rgba(255, 255, 255, 0.16); color: #fff; }
     .details-meta { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 8px; }
     .pd-title { font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px; }
+    
+    /* Fix for product image display */
+    .product__details-nav-thumb { 
+        background: #fff !important; 
+        min-height: 400px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 20px !important;
+    }
+    .product__details-nav-thumb img { 
+        width: 100% !important; 
+        height: auto !important; 
+        display: block !important; 
+        background: #fff !important; 
+        object-fit: contain !important;
+        max-height: 500px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    .w-img { 
+        width: 100% !important; 
+        position: relative !important;
+        overflow: visible !important;
+        display: block !important;
+    }
+    .w-img img {
+        width: 100% !important;
+        display: block !important;
+    }
+    .product__details-thumb {
+        width: 100% !important;
+        max-width: 600px !important;
+        display: block !important;
+    }
+    .tab-content {
+        width: 100% !important;
+    }
+    .tab-pane {
+        width: 100% !important;
+    }
+    .tab-pane.show {
+        display: block !important;
+    }
+    .tab-pane.active {
+        display: block !important;
+    }
+    .product__details-thumb .tab-pane {
+        min-height: 400px;
+    }
+    #mainProductImage {
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: 500px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    .product__details-nav .nav-link {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    .product__details-nav .nav-link img {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    /* Buy Now Button */
+    .buy-now-btn {
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #fcbe00 0%, #ffa500 100%);
+        color: #111827;
+        border: none;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 15px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(252, 190, 0, 0.3);
+    }
+    .buy-now-btn:hover {
+        background: linear-gradient(135deg, #ffa500 0%, #fcbe00 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(252, 190, 0, 0.4);
+    }
+    .buy-now-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
 </style>
 
     <!-- breadcrumb__area-start -->
@@ -51,44 +144,51 @@
             <div class="container">
                 <div class="row">
                     <div class="col-xl-6">
-                        <div class="product__details-nav d-sm-flex align-items-start">
-                            <ul class="nav nav-tabs flex-sm-column justify-content-between" id="productThumbTab" role="tablist">
+                        <div class="product__details-nav d-sm-flex align-items-start" style="gap: 15px;">
+                            <!-- Thumbnail Navigation -->
+                            <ul class="nav nav-tabs flex-sm-column" id="productThumbTab" role="tablist" style="gap: 10px; min-width: 100px;">
                                 <li class="nav-item" role="presentation">
-                                  <button class="nav-link active" id="thumbOne-tab" data-bs-toggle="tab" data-bs-target="#thumbOne" type="button" role="tab" aria-controls="thumbOne" aria-selected="true">
-                                      {% if product.image %}
-                                          <img src="{{ product.image.url }}" alt="{{ product.name }}" style="max-width: 80px;">
-                                      {% else %}
-                                          <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ product.name }}" style="max-width: 80px; background-color: #f0f0f0;">
-                                      {% endif %}
-                                  </button>
+                                    <button class="nav-link active p-2 border rounded product-thumb-button" id="thumbOne-tab"
+                                            type="button"
+                                            data-large-src="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
+                                            style="width: 100px; height: 100px; padding: 5px !important; display: flex; align-items: center; justify-content: center;">
+                                        {% if product.image %}
+                                            <img src="{{ product.image.url }}" alt="{{ product.name }}" 
+                                                 style="width: 90px; height: 90px; object-fit: cover; display: block;">
+                                        {% else %}
+                                            <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ product.name }}" 
+                                                 style="width: 90px; height: 90px; object-fit: cover; display: block;">
+                                        {% endif %}
+                                    </button>
                                 </li>
                                 {% for additional_image in product.additional_images.all %}
                                 <li class="nav-item" role="presentation">
-                                  <button class="nav-link" id="thumb{{ forloop.counter }}-tab" data-bs-toggle="tab" data-bs-target="#thumb{{ forloop.counter }}" type="button" role="tab" aria-controls="thumb{{ forloop.counter }}" aria-selected="false">
-                                      <img src="{{ additional_image.image.url }}" alt="{{ product.name }}" style="max-width: 80px;">
-                                  </button>
+                                    <button class="nav-link p-2 border rounded product-thumb-button" id="thumb{{ forloop.counter }}-tab"
+                                            type="button"
+                                            data-large-src="{{ additional_image.image.url }}"
+                                            style="width: 100px; height: 100px; padding: 5px !important; display: flex; align-items: center; justify-content: center;">
+                                        <img src="{{ additional_image.image.url }}" alt="{{ product.name }}" 
+                                             style="width: 90px; height: 90px; object-fit: cover; display: block;">
+                                    </button>
                                 </li>
                                 {% endfor %}
                             </ul>
-                            <div class="product__details-thumb">
-                                <div class="tab-content" id="productThumbContent">
-                                    <div class="tab-pane fade show active" id="thumbOne" role="tabpanel" aria-labelledby="thumbOne-tab">
-                                        <div class="product__details-nav-thumb w-img">
-                                            {% if product.image %}
-                                                <img src="{{ product.image.url }}" alt="{{ product.name }}">
-                                            {% else %}
-                                                <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ product.name }}" style="background-color: #f0f0f0; width: 100%; height: auto;">
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% for additional_image in product.additional_images.all %}
-                                    <div class="tab-pane fade" id="thumb{{ forloop.counter }}" role="tabpanel" aria-labelledby="thumb{{ forloop.counter }}-tab">
-                                        <div class="product__details-nav-thumb w-img">
-                                            <img src="{{ additional_image.image.url }}" alt="{{ product.name }}">
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                  </div>
+                            
+                            <!-- Main Image Display -->
+                            <div class="product__details-thumb flex-grow-1">
+                                <div class="product__details-nav-thumb" style="background: #ffffff; padding: 30px; border: 2px solid #eee; border-radius: 12px; min-height: 400px; display: flex !important; align-items: center; justify-content: center;">
+                                    {% if product.image %}
+                                        <img id="mainProductImage" src="{{ product.image.url }}" 
+                                             alt="{{ product.name }}"
+                                             style="display: block !important; width: 100% !important; height: auto !important; max-height: 500px !important; object-fit: contain !important; visibility: visible !important; opacity: 1 !important;"
+                                             onload="console.log('Main image loaded successfully:', this.src);"
+                                             onerror="console.error('MAIN IMAGE FAILED TO LOAD:', this.src); this.src='{% static 'assets/img/product/tp-1.jpg' %}'; this.style.backgroundColor='#ffcccc';">
+                                    {% else %}
+                                        <img id="mainProductImage" src="{% static 'assets/img/product/tp-1.jpg' %}" 
+                                             alt="{{ product.name }}"
+                                             style="display: block !important; width: 100% !important; height: auto !important; max-height: 500px !important; object-fit: contain !important; background-color: #f0f0f0;">
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -109,9 +209,9 @@
                                 <span><a href="#">Add your review</a></span>
                             </div>
                             <div class="price mb-10">
-                                <span>${{ product.price }}</span>
+                                <span>&#8377;{{ product.price }}</span>
                                 {% if product.old_price %}
-                                    <span style="text-decoration: line-through; color: #999; margin-left: 10px;">${{ product.old_price }}</span>
+                                    <span style="text-decoration: line-through; color: #999; margin-left: 10px;">&#8377;{{ product.old_price }}</span>
                                 {% endif %}
                             </div>
                             <div class="features-des mb-20 mt-10">
@@ -137,6 +237,9 @@
                                         </div>
                                         <button type="submit" class="cart-btn" {% if product.stock == 0 %}disabled{% endif %}>
                                             <i class="fas fa-shopping-cart"></i> Add to Cart
+                                        </button>
+                                        <button type="button" class="buy-now-btn" onclick="buyNow({{ product.id }}, this.closest('form').querySelector('.qty-input').value)" {% if product.stock == 0 %}disabled{% endif %}>
+                                            <i class="fas fa-bolt"></i> Buy Now
                                         </button>
                                     </div>
                                     <p class="text-muted small mb-0">Quantity updates instantly — no tiny spinners.</p>
@@ -190,81 +293,23 @@
             <div class="container">
                 <div class="row">
                     <div class="col-xl-12">
-                        <div class="product__details-des-tab">
-                            <ul class="nav nav-tabs" id="productDesTab" role="tablist">
-                                <li class="nav-item" role="presentation">
-                                  <button class="nav-link active" id="des-tab" data-bs-toggle="tab" data-bs-target="#des" type="button" role="tab" aria-controls="des" aria-selected="true">Description </button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link" id="aditional-tab" data-bs-toggle="tab" data-bs-target="#aditional" type="button" role="tab" aria-controls="aditional" aria-selected="false">Additional information</button>
-                                  </li>
-                                <li class="nav-item" role="presentation">
-                                  <button class="nav-link" id="review-tab" data-bs-toggle="tab" data-bs-target="#review" type="button" role="tab" aria-controls="review" aria-selected="false">Reviews (1) </button>
-                                </li>
-                              </ul>
-                        </div>
-                    </div>
-                </div>
-                <div class="tab-content" id="prodductDesTaContent">
-                    <div class="tab-pane fade active show" id="des" role="tabpanel" aria-labelledby="des-tab">
                         <div class="product__details-des-wrapper">
+                            <h4 class="mb-30">Description</h4>
                             {% if product.description %}
                                 {{ product.description|linebreaks }}
                             {% else %}
-                                <p class="des-text mb-35">Designed by Hans J. Wegner in 1949 as one of the first models created especially for Carl Hansen & Son, and produced since 1950. The last of a series of chairs wegner designed based on inspiration from antique Chinese armchairs. The gently rounded top together with the back and seat offers a variety of comfortable seating positions,ideal for both long visits to the dining table and relaxed lounging.</p>
-                                <h6 class="des-sm-title">The standard passage, used since the 1500s.</h6>
-                                <p class="des-text mb-35">A light chair, easy to move around the dining table and about the room. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Lorem ipsum dolor sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+                                <p class="des-text mb-35">No description available for this product.</p>
                             {% endif %}
-                            <div class="features-des-image text-center">
-                                <img src="{% static 'assets/img/features-product/product-content-1.jpg'%}" alt="">
+                            
+                            {% if product.descriptionImage %}
+                            <div class="features-des-image text-center my-50">
+                                <img src="{{ product.descriptionImage.url }}" alt="{{ product.name }}" style="max-width: 100%; height: auto; border-radius: 8px;">
                             </div>
-                            <div class="product-des-section mb-90">
-                                <h5 class="des-section mb-30">Get 30% Daily Cash
-                                  <br>  Back with Membership Card.</h5>
-                                  <p>A new collection of lounge furniture, occasional tables and a stool by Edward Barber & Jay Osgerby offers a relaxed, contemporary attitude toward interior design. The lounge furniture includes four individualized sized sofas, and three complementary ottomans. Available in a range of upholstery fabrics and leathers, the lounge furniture is distinguished by stitched seams that reinforce its architectural profile, softened by the curvature of cushions on each face range of upholstery fabrics and leathers.</p>
-                            </div>
-                            <div class="row mb-80">
-                                <div class="col-xl-6">
-                                    <div class="des-single mb-30 text-center">
-                                        <div class="features-des-image text-center">
-                                            <img src="{% static 'assets/img/features-product/product-content-2.jpg'%}" alt="">
-                                        </div>
-                                        <h5 class="des-section">Get 30% Daily Cash
-                                            <br>  Back with Membership Card.</h5>
-                                        <p>Sit amet conse ctetur adipisicing elit, sed do <br> eiusmod tempor incididunt ut labore et dolore  magna aliqua.</p>
-                                    </div>
-                                </div>
-                                <div class="col-xl-6">
-                                    <div class="des-single text-center mb-30">
-                                        <div class="features-des-image">
-                                            <img src="{% static 'assets/img/features-product/product-content-3.jpg'%}" alt="">
-                                        </div>
-                                        <h5 class="des-section text-center">Get 70% Daily Cash
-                                            <br>  Back with Membership Card.</h5>
-                                        <p>Sit amet conse ctetur adipisicing elit, sed do <br> eiusmod tempor incididunt ut labore et dolore  magna aliqua.</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="features-des-image features-des-image-2 text-center mb-50 w-img">
-                                <img src="{% static 'assets/img/features-product/product-content-4.jpg'%}" alt="">
-                            </div>
-                            <div class="des-sm-features">
-                                <div class="des-sm-fet text-center mb-30">
-                                    <img src="{% static 'assets/img/features-product/product-content-5.png" alt="">
-                                    <span>Ultra Wide Angle</span>
-                                </div>
-                                <div class="des-sm-fet text-center mb-30">
-                                    <img src="{% static 'assets/img/features-product/product-content-6.png" alt="">
-                                    <span>Live Focus On</span>
-                                </div>
-                            </div>
-                            <p class="des-text mb-35">Designed by Puik in 1949 as one of the first models created especially for Carl Hansen & Son, and produced since 1950. The last of a series of chairs wegner designed based on inspiration from antique Chinese armchairs. The gently rounded top together with the back and seat offers a variety of comfortable seating positions,ideal for both long visits to the dining table and relaxed lounging. A light chair easy to move around the dining table and about the room. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla.</p>
-                            <h6 class="des-sm-title">Section 1.10.32 of "de Finibus Bonorum et Malorum", written by Cicero in 45 BC.</h6>
-                            <p class="des-text mb-25">Sound of Marshall, unplugs the chords, and takes the show on the road. Weighing in under 7 pounds, the Kilburn is a lightweight piece of vintage styled engineering. Setting the bar as one of the loudest speakers in its class, the Kilburn is a compact, stout-hearted hero with a well-balanced audio which boasts a clear midrange and extended highs for a sound that is both articulate and pronounced. The analogue knobs allow you to fine tune the controls to your personal preferences while the guitar-influenced leather strap enables easy and stylish travel.</p>
+                            {% endif %}
                         </div>
-                    </div>
-                    <div class="tab-pane fade" id="aditional" role="tabpanel" aria-labelledby="aditional-tab">
-                        <div class="product__desc-info">
+                        
+                        <div class="product__desc-info mt-50 mb-50">
+                            <h4 class="mb-30">Additional Information</h4>
                             <ul>
                                {% if product.weight %}
                                <li>
@@ -314,123 +359,11 @@
                                {% endif %}
                             </ul>
                          </div>
-                    </div>
-                    <div class="tab-pane fade" id="review" role="tabpanel" aria-labelledby="review-tab">
-                        <div class="product__details-review">
-                            <style>
-                                .review-item { padding: 20px; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px; }
-                                .review-item:last-child { border-bottom: none; }
-                                .review-header { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; }
-                                .review-avatar { width: 50px; height: 50px; border-radius: 50%; background: #f3f4f6; display: grid; place-items: center; font-weight: 700; color: #111827; }
-                                .review-meta h6 { margin: 0; font-weight: 600; color: #111827; }
-                                .review-meta .date { color: #6b7280; font-size: 13px; }
-                                .review-stars { color: #f59e0b; margin-bottom: 8px; }
-                                .review-comment { color: #4b5563; line-height: 1.6; }
-                                .no-reviews { text-align: center; padding: 40px 20px; color: #9ca3af; }
-                                .rating-selector { display: flex; gap: 8px; margin-bottom: 20px; }
-                                .rating-selector input[type="radio"] { display: none; }
-                                .rating-selector label { cursor: pointer; font-size: 24px; color: #d1d5db; transition: color 120ms ease; }
-                                .rating-selector input:checked ~ label,
-                                .rating-selector label:hover,
-                                .rating-selector label:hover ~ label { color: #f59e0b; }
-                            </style>
-                            
-                            <!-- Approved Reviews List -->
-                            <div class="row">
-                                <div class="col-xl-12">
-                                    <div class="mb-4">
-                                        <h5 class="mb-3">Customer Reviews ({{ review_count }})</h5>
-                                        {% if reviews %}
-                                            {% for review in reviews %}
-                                            <div class="review-item">
-                                                <div class="review-header">
-                                                    <div class="review-avatar">{{ review.name|first|upper }}</div>
-                                                    <div class="review-meta">
-                                                        <h6>{{ review.name }}</h6>
-                                                        <span class="date">{{ review.created_at|date:"F d, Y" }}</span>
-                                                    </div>
-                                                </div>
-                                                <div class="review-stars">
-                                                    {% for i in "12345" %}
-                                                        {% if forloop.counter <= review.rating %}
-                                                            <i class="fas fa-star"></i>
-                                                        {% else %}
-                                                            <i class="fal fa-star"></i>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </div>
-                                                <p class="review-comment">{{ review.comment }}</p>
-                                            </div>
-                                            {% endfor %}
-                                        {% else %}
-                                            <div class="no-reviews">
-                                                <i class="fal fa-comments" style="font-size: 48px; margin-bottom: 12px; display: block;"></i>
-                                                <p>No reviews yet. Be the first to review this product!</p>
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Add Review Form -->
-                            <div class="row">
-                                <div class="col-xl-12">
-                                    <div class="product__details-comment">
-                                        <div class="comment-title mb-20">
-                                           <h3>Add a review</h3>
-                                           <p>Your email address will not be published. Required fields are marked *</p>
-                                           {% if not user.is_authenticated %}
-                                               <p class="text-danger"><strong>Please <a href="{% url 'login' %}?next={{ request.path }}">login</a> to submit a review.</strong></p>
-                                           {% endif %}
-                                        </div>
-                                        
-                                        {% if user.is_authenticated %}
-                                        <div class="comment-input-box">
-                                           <form method="POST" action="{% url 'submit_review' product.id %}">
-                                              {% csrf_token %}
-                                              <div class="row">
-                                                <div class="col-xxl-12 mb-3">
-                                                    <label class="form-label">Overall rating *</label>
-                                                    <div class="rating-selector">
-                                                        <input type="radio" name="rating" value="5" id="star5" checked>
-                                                        <label for="star5"><i class="fas fa-star"></i></label>
-                                                        <input type="radio" name="rating" value="4" id="star4">
-                                                        <label for="star4"><i class="fas fa-star"></i></label>
-                                                        <input type="radio" name="rating" value="3" id="star3">
-                                                        <label for="star3"><i class="fas fa-star"></i></label>
-                                                        <input type="radio" name="rating" value="2" id="star2">
-                                                        <label for="star2"><i class="fas fa-star"></i></label>
-                                                        <input type="radio" name="rating" value="1" id="star1">
-                                                        <label for="star1"><i class="fas fa-star"></i></label>
-                                                    </div>
-                                                </div>
-                                                <div class="col-xxl-6 col-xl-6">
-                                                    <div class="comment-input">
-                                                       <input type="text" name="name" placeholder="Your Name *" required value="{{ user.get_full_name|default:user.username }}">
-                                                    </div>
-                                                 </div>
-                                                 <div class="col-xxl-6 col-xl-6">
-                                                    <div class="comment-input">
-                                                       <input type="email" name="email" placeholder="Your Email *" required value="{{ user.email }}">
-                                                    </div>
-                                                 </div>
-                                                 <div class="col-xxl-12">
-                                                       <textarea name="comment" placeholder="Your review *" class="comment-input comment-textarea" required></textarea>
-                                                 </div>
-                                                 <div class="col-xxl-12">
-                                                    <div class="comment-submit">
-                                                       <button type="submit" class="cart-btn">Submit Review</button>
-                                                       <p class="text-muted small mt-2">Your review will be visible after admin approval.</p>
-                                                    </div>
-                                                 </div>
-                                              </div>
-                                           </form>
-                                        </div>
-                                        {% endif %}
-                                     </div>
-                                </div>
-                            </div>
-                        </div>
+                         
+                         <div class="product__reviews-section mt-50">
+                            <h4 class="mb-30">Customer Reviews</h4>
+                            {% include 'review_enhanced.html' %}
+                         </div>
                     </div>
                 </div>
             </div>
@@ -513,7 +446,7 @@
                                         </div>
                                     </div>
                                     <div class="product__price">
-                                        <span>$109.00 – $307.00</span>
+                                        <span>&#8377;109.00 – &#8377;307.00</span>
                                     </div>
                                     <div class="product__modal-des mt-20 mb-15">
                                         <ul>
@@ -566,19 +499,71 @@
         <!-- shop modal end -->
 
         <script>
+        // Debug: Check if product images are loading
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== Product Image Debug ===');
+            
+            const mainImg = document.getElementById('mainProductImage');
+            const thumbButtons = document.querySelectorAll('.product-thumb-button');
+
+            thumbButtons.forEach((button) => {
+                button.addEventListener('click', function() {
+                    const newSrc = this.getAttribute('data-large-src');
+                    if (mainImg && newSrc) {
+                        mainImg.src = newSrc;
+                    }
+                    thumbButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+
+            // Check main image
+            if (mainImg) {
+                console.log('Main image found:', mainImg.src);
+                console.log('Main image computed style:', window.getComputedStyle(mainImg));
+                
+                mainImg.addEventListener('load', function() {
+                    console.log('✓ Main image loaded successfully');
+                    console.log('Image dimensions:', this.naturalWidth, 'x', this.naturalHeight);
+                });
+                
+                mainImg.addEventListener('error', function() {
+                    console.error('✗ Main image failed to load:', this.src);
+                });
+            } else {
+                console.error('✗ Main image element not found');
+            }
+            
+            // Check all thumbnail images
+            const thumbs = document.querySelectorAll('.nav-link img');
+            console.log('Thumbnail images found:', thumbs.length);
+            thumbs.forEach((img, index) => {
+                console.log(`Thumb ${index}:`, img.src);
+            });
+        });
+        </script>
+
+        <script>
         // Quantity control buttons on product details page
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Product Details: Quantity control script loaded');
+            
             document.querySelectorAll('.qty-control').forEach(control => {
                 const input = control.querySelector('.qty-input');
+                const buttons = control.querySelectorAll('.qty-btn');
                 const min = parseInt(input.getAttribute('min')) || 1;
                 const max = parseInt(input.getAttribute('max')) || parseInt(control.dataset.max) || 999;
 
-                control.querySelectorAll('.qty-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
+                console.log('Quantity control found:', { min, max, buttons: buttons.length });
+
+                buttons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
                         const step = parseInt(btn.dataset.step || '1');
                         let value = parseInt(input.value) || min;
                         value = Math.min(max, Math.max(min, value + step));
                         input.value = value;
+                        console.log('Quantity changed to:', value);
                     });
                 });
 
@@ -587,10 +572,16 @@
                     value = Math.min(max, Math.max(min, value));
                     input.value = value;
                 });
+                
+                input.addEventListener('change', () => {
+                    let value = parseInt(input.value) || min;
+                    value = Math.min(max, Math.max(min, value));
+                    input.value = value;
+                });
             });
         });
 
-        // Wishlist functionality for product details
+        // Wishlist functionality for product details - Toggle add/remove
         function getCsrfTokenPd() {
             const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
             return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
@@ -621,19 +612,29 @@
                     }
                 });
 
-                let data = { success: false, message: '' };
-                try { data = await response.json(); } catch (_) {}
+                const data = await response.json();
 
-                const isAlready = data.message && data.message.toLowerCase().includes('already');
-                if (response.ok && (data.success || isAlready)) {
-                    button.classList.add('wishlisted');
+                if (response.ok && data.success) {
                     const icon = button.querySelector('i');
-                    if (icon) {
-                        icon.classList.remove('fal');
-                        icon.classList.add('fas');
-                    }
                     const text = button.querySelector('span:last-child');
-                    if (text) text.textContent = 'In wishlist';
+                    
+                    if (data.in_wishlist) {
+                        // Added to wishlist
+                        button.classList.add('wishlisted');
+                        if (icon) {
+                            icon.classList.remove('fal');
+                            icon.classList.add('fas');
+                        }
+                        if (text) text.textContent = 'In wishlist';
+                    } else {
+                        // Removed from wishlist
+                        button.classList.remove('wishlisted');
+                        if (icon) {
+                            icon.classList.remove('fas');
+                            icon.classList.add('fal');
+                        }
+                        if (text) text.textContent = 'Add to wishlist';
+                    }
                 }
             } catch (error) {
                 console.error('Wishlist error', error);
@@ -651,6 +652,42 @@
                 alert('Product added to compare list! (' + compareList.length + ' products)');
             } else {
                 alert('Product already in compare list!');
+            }
+        }
+
+        // Buy Now functionality - Add to cart and redirect to checkout
+        async function buyNow(productId, quantity) {
+            // Check if user is logged in
+            {% if not user.is_authenticated %}
+                window.location.href = "{% url 'login' %}?next={{ request.path }}";
+                return;
+            {% endif %}
+
+            const url = `/buy-now/${productId}/`;
+            const csrftoken = getCsrfTokenPd();
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: `quantity=${quantity}`
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Redirect to cart or checkout page
+                    window.location.href = data.redirect_url || '/cart/';
+                } else {
+                    alert(data.message || 'Failed to process order');
+                }
+            } catch (error) {
+                console.error('Buy Now error:', error);
+                alert('An error occurred. Please try again.');
             }
         }
 
@@ -718,4 +755,4 @@
         }
         </script>
         
-        {%endblock content %}
+        {% endblock content %}

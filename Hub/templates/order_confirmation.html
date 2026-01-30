@@ -1,0 +1,209 @@
+﻿{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Order Confirmation - FashionHub{% endblock %}
+
+{% block content %}
+
+<!-- page-banner-area-start -->
+<div class="page-banner-area page-banner-height-2" data-background="{% static 'assets/img/banner/page-banner-4.jpg' %}">
+    <div class="container">
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="page-banner-content text-center">
+                    <h4 class="breadcrumb-title">Order Confirmation</h4>
+                    <div class="breadcrumb-two">
+                        <nav>
+                           <nav class="breadcrumb-trail breadcrumbs">
+                              <ul class="breadcrumb-menu">
+                                 <li class="breadcrumb-trail">
+                                    <a href="{% url 'index' %}"><span>Home</span></a>
+                                 </li>
+                                 <li class="trail-item">
+                                    <span>Order Confirmation</span>
+                                 </li>
+                              </ul>
+                           </nav> 
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- page-banner-area-end -->
+
+<!-- order-confirmation-area-start -->
+<section class="order-confirmation-area pt-120 pb-120">
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="order-confirmation-message text-center mb-50">
+                    <i class="fas fa-check-circle" style="font-size: 80px; color: #4caf50;"></i>
+                    <h2 class="mt-3">Thank You for Your Order!</h2>
+                    <p class="mt-2">Your order has been successfully placed.</p>
+                    {% if order.is_resell %}
+                        <span class="badge bg-info" style="font-size: 16px; padding: 8px 15px;">🔄 RESELL ORDER</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="order-details-card" style="background: #f9f9f9; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <h4 class="mb-4">Order Details</h4>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Order Number:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            <span class="badge bg-primary" style="font-size: 14px;">{{ order.order_number }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Order Date:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {{ order.created_at|date:"F d, Y h:i A" }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Payment Method:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {% if order.payment_method == 'COD' %}
+                                <span class="badge bg-warning">Cash on Delivery</span>
+                            {% elif order.payment_method == 'RAZORPAY' %}
+                                <span class="badge bg-success">Razorpay</span>
+                            {% else %}
+                                {{ order.get_payment_method_display }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Payment Status:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {% if order.payment_status == 'PAID' %}
+                                <span class="badge bg-success">Paid</span>
+                            {% elif order.payment_status == 'PENDING' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif order.payment_status == 'FAILED' %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ order.payment_status }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-6">
+                            <strong>Order Status:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {% if order.order_status == 'PENDING' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif order.order_status == 'PROCESSING' %}
+                                <span class="badge bg-info">Processing</span>
+                            {% elif order.order_status == 'SHIPPED' %}
+                                <span class="badge bg-primary">Shipped</span>
+                            {% elif order.order_status == 'DELIVERED' %}
+                                <span class="badge bg-success">Delivered</span>
+                            {% elif order.order_status == 'CANCELLED' %}
+                                <span class="badge bg-danger">Cancelled</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ order.order_status }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h5 class="mt-4 mb-3">Order Items</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order_items %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% if item.product_image %}
+                                                <img src="{{ item.product_image }}" alt="{{ item.product_name }}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 5px; margin-right: 10px;">
+                                            {% endif %}
+                                            {{ item.product_name }}
+                                        </div>
+                                    </td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>&#8377;{{ item.product_price }}</td>
+                                    <td>&#8377;{{ item.subtotal }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Subtotal:</strong></td>
+                                    <td>&#8377;{{ order.subtotal }}</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Tax:</strong></td>
+                                    <td>&#8377;{{ order.tax }}</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Shipping:</strong></td>
+                                    <td>
+                                        {% if order.shipping_cost > 0 %}
+                                            &#8377;{{ order.shipping_cost }}
+                                        {% else %}
+                                            FREE
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr class="table-active">
+                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                    <td><strong>&#8377;{{ order.total_amount }}</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h5 class="mt-4 mb-3">Shipping Address</h5>
+                    <p style="white-space: pre-line;">{{ order.shipping_address }}</p>
+                    
+                    {% if order.customer_notes %}
+                    <hr>
+                    <h5 class="mt-4 mb-3">Order Notes</h5>
+                    <p>{{ order.customer_notes }}</p>
+                    {% endif %}
+                    
+                    <div class="order-actions mt-5 text-center">
+                        <a href="{% url 'profile' %}" class="tp-btn-h1 me-2">View My Orders</a>
+                        <a href="{% url 'index' %}" class="tp-btn-h1">Continue Shopping</a>
+                        <a href="{% url 'resell_order' order.id %}" class="tp-btn-h1 ms-2" style="background-color: #2196f3;">🔄 Resell This Order</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<!-- order-confirmation-area-end -->
+
+{% endblock content %}

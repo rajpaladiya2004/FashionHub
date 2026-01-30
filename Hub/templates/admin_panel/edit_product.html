@@ -1,0 +1,229 @@
+{% extends 'admin_panel/base_admin.html' %}
+{% load static %}
+
+{% block title %}Edit Product - FashioHub Admin{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold py-3 mb-4">
+    <span class="text-muted fw-light">Products /</span> Edit Product
+    <a href="{% url 'admin_product_list' %}" class="btn btn-sm btn-secondary float-end">
+        <i class='bx bx-arrow-back'></i> Back to List
+    </a>
+</h4>
+
+<!-- Display messages -->
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="row">
+    <!-- Basic Information -->
+    <div class="col-xl-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Edit: {{ product.name }}</h5>
+                <small class="text-muted float-end">Required fields *</small>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="name">Product Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ product.name }}" required />
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="price">Price *</label>
+                            <div class="input-group input-group-merge">
+                                <span class="input-group-text">&#8377;</span>
+                                <input type="number" step="0.01" class="form-control" id="price" name="price" value="{{ product.price }}" required />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="old_price">Old Price (Compare at)</label>
+                            <div class="input-group input-group-merge">
+                                <span class="input-group-text">&#8377;</span>
+                                <input type="number" step="0.01" class="form-control" id="old_price" name="old_price" value="{{ product.old_price|default:'' }}" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="description">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="4">{{ product.description }}</textarea>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="sku">SKU</label>
+                            <input type="text" class="form-control" id="sku" name="sku" value="{{ product.sku|default:'' }}" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="brand">Brand</label>
+                            <input type="text" class="form-control" id="brand" name="brand" value="{{ product.brand|default:'' }}" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="category">Category</label>
+                            <select id="category" name="category" class="form-select">
+                                <option value="">Select Category</option>
+                                <option value="TOP_DEALS" {% if product.category == 'TOP_DEALS' %}selected{% endif %}>Top Deals</option>
+                                <option value="TOP_SELLING" {% if product.category == 'TOP_SELLING' %}selected{% endif %}>Top Selling</option>
+                                <option value="TOP_FEATURED" {% if product.category == 'TOP_FEATURED' %}selected{% endif %}>Top Featured</option>
+                                <option value="RECOMMENDED" {% if product.category == 'RECOMMENDED' %}selected{% endif %}>Recommended</option>
+                                <option value="MOBILES" {% if product.category == 'MOBILES' %}selected{% endif %}>Mobiles</option>
+                                <option value="FOOD_HEALTH" {% if product.category == 'FOOD_HEALTH' %}selected{% endif %}>Food & Health</option>
+                                <option value="HOME_KITCHEN" {% if product.category == 'HOME_KITCHEN' %}selected{% endif %}>Home & Kitchen</option>
+                                <option value="AUTO_ACC" {% if product.category == 'AUTO_ACC' %}selected{% endif %}>Auto Acc</option>
+                                <option value="FURNITURE" {% if product.category == 'FURNITURE' %}selected{% endif %}>Furniture</option>
+                                <option value="SPORTS" {% if product.category == 'SPORTS' %}selected{% endif %}>Sports</option>
+                                <option value="GENZ_TRENDS" {% if product.category == 'GENZ_TRENDS' %}selected{% endif %}>GenZ Trends</option>
+                                <option value="NEXT_GEN" {% if product.category == 'NEXT_GEN' %}selected{% endif %}>Next Gen</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="stock">Stock</label>
+                            <input type="number" class="form-control" id="stock" name="stock" value="{{ product.stock }}" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="color">Color</label>
+                            <input type="text" class="form-control" id="color" name="color" value="{{ product.color|default:'' }}" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="size">Size</label>
+                            <input type="text" class="form-control" id="size" name="size" value="{{ product.size|default:'' }}" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="weight">Weight</label>
+                            <input type="text" class="form-control" id="weight" name="weight" value="{{ product.weight|default:'' }}" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="dimensions">Dimensions</label>
+                            <input type="text" class="form-control" id="dimensions" name="dimensions" value="{{ product.dimensions|default:'' }}" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="tags">Tags (comma separated)</label>
+                            <input type="text" class="form-control" id="tags" name="tags" value="{{ product.tags|default:'' }}" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="shipping_info">Shipping Information</label>
+                        <textarea class="form-control" id="shipping_info" name="shipping_info" rows="2">{{ product.shipping_info|default:'' }}</textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="care_info">Care Instructions</label>
+                        <textarea class="form-control" id="care_info" name="care_info" rows="2">{{ product.care_info|default:'' }}</textarea>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="rating">Rating (0-5)</label>
+                            <input type="number" step="0.1" min="0" max="5" class="form-control" id="rating" name="rating" value="{{ product.rating|default:'0' }}" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="review_count">Review Count</label>
+                            <input type="number" class="form-control" id="review_count" name="review_count" value="{{ product.review_count|default:'0' }}" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="image">Main Product Image</label>
+                        {% if product.image %}
+                            <div class="mb-2">
+                                <img src="{{ product.image.url }}" alt="{{ product.name }}" style="max-width: 200px; border-radius: 8px;">
+                            </div>
+                        {% endif %}
+                        <input class="form-control" type="file" id="image" name="image" accept="image/*" />
+                        <small class="text-muted">Leave empty to keep current image</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="descriptionImage">Description Image</label>
+                        {% if product.descriptionImage %}
+                            <div class="mb-2">
+                                <img src="{{ product.descriptionImage.url }}" alt="Description" style="max-width: 200px; border-radius: 8px;">
+                            </div>
+                        {% endif %}
+                        <input class="form-control" type="file" id="descriptionImage" name="descriptionImage" accept="image/*" />
+                        <small class="text-muted">Leave empty to keep current image</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="gallery_images">Add Gallery Images (Multiple)</label>
+                        <input class="form-control" type="file" id="gallery_images" name="gallery_images" accept="image/*" multiple />
+                        <small class="text-muted">Add more gallery images (existing ones will be kept)</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if product.is_active %}checked{% endif %} />
+                            <label class="form-check-label" for="is_active">Active (Visible on website)</label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="is_top_deal" name="is_top_deal" {% if product.is_top_deal %}checked{% endif %} />
+                            <label class="form-check-label" for="is_top_deal">Mark as Top Deal</label>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class='bx bx-save'></i> Update Product
+                        </button>
+                        <a href="{% url 'admin_product_list' %}" class="btn btn-secondary">Cancel</a>
+                        <a href="{% url 'admin_delete_product' product.id %}" class="btn btn-danger ms-auto" 
+                           onclick="return confirm('Are you sure you want to delete this product?')">
+                            <i class='bx bx-trash'></i> Delete Product
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Product Info Sidebar -->
+    <div class="col-xl-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Product Information</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2"><strong>Product ID:</strong> #{{ product.id }}</p>
+                <p class="mb-2"><strong>SKU:</strong> {{ product.sku|default:"Not set" }}</p>
+                <p class="mb-2"><strong>Status:</strong> 
+                    {% if product.is_active %}
+                        <span class="badge bg-success">Active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </p>
+                <p class="mb-2"><strong>Stock:</strong> {{ product.stock|default:"0" }} units</p>
+                <p class="mb-2"><strong>Rating:</strong> {{ product.rating|default:"0" }}/5</p>
+                <hr>
+                <a href="{% url 'product-details' product.id %}" class="btn btn-sm btn-outline-primary w-100" target="_blank">
+                    <i class='bx bx-show'></i> View on Website
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

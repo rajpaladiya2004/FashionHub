@@ -697,7 +697,7 @@ progress {
 }
 
 .row {
-    --bs-gutter-x: 30px;
+    --bs-gutter-x: 50px;
     --bs-gutter-y: 0;
     display: flex;
     flex-wrap: wrap;

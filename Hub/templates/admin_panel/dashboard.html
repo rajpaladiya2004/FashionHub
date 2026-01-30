@@ -1,0 +1,798 @@
+﻿{% extends 'admin_panel/base_admin.html' %}
+{% load static %}
+
+{% block title %}Dashboard - FashioHub Admin{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'admin/assets/vendor/libs/apex-charts/apex-charts.css' %}" />
+<style>
+    .stat-card {
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+    .chart-xs { min-height: 90px; }
+    .chart-sm { min-height: 120px; }
+    .chart-md { min-height: 220px; }
+    .chart-lg { min-height: 320px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Search -->
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="input-group input-group-merge">
+                    <span class="input-group-text"><i class="bx bx-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Search (CTRL + K)" aria-label="Search dashboard" />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Row -->
+<div class="row">
+    <!-- Best Seller / Achievement -->
+    <div class="col-xl-4 col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <h5 class="card-title mb-1">Congratulations! 🎉</h5>
+                        <p class="text-muted mb-2">Best seller of the month</p>
+                        <h4 class="mb-1">₹{{ best_seller_sales|floatformat:2 }}</h4>
+                        <small class="text-muted">{{ best_seller_target_percent }}% of target</small>
+                    </div>
+                    <div class="avatar avatar-xl">
+                        <span class="avatar-initial rounded bg-label-warning"><i class="bx bx-trophy"></i></span>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <span class="badge bg-label-primary">{{ best_seller_name|truncatewords:4 }}</span>
+                </div>
+                <a href="{% url 'admin_orders' %}" class="btn btn-sm btn-primary mt-3">View Sales</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Visitors -->
+    <div class="col-xl-4 col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div>
+                        <h6 class="mb-1">New Visitors</h6>
+                        <h3 class="mb-0">{{ visitors_weekly_percent }}%</h3>
+                        <small class="text-muted">Last week</small>
+                    </div>
+                    <div class="badge bg-label-info">Week</div>
+                </div>
+                <div id="newVisitorsChart" class="chart-sm"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity -->
+    <div class="col-xl-4 col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div>
+                        <h6 class="mb-1">Activity</h6>
+                        <h3 class="mb-0">{{ activity_weekly_percent }}%</h3>
+                        <small class="text-muted">Last week</small>
+                    </div>
+                    <div class="badge bg-label-success">Week</div>
+                </div>
+                <div id="activityChart" class="chart-sm"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- KPI Row -->
+<div class="row">
+    <div class="col-xl-3 col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="avatar me-3">
+                        <span class="avatar-initial rounded bg-label-primary"><i class="bx bx-cart"></i></span>
+                    </div>
+                    <div>
+                        <p class="mb-1">Sales</p>
+                        <h4 class="mb-0">₹{{ last_30_revenue|floatformat:0 }}</h4>
+                        <small class="text-{% if sales_change_percent >= 0 %}success{% else %}danger{% endif %}">
+                            {% if sales_change_percent >= 0 %}+{% endif %}{{ sales_change_percent }}%
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div>
+                        <p class="mb-1">Profit</p>
+                        <h4 class="mb-0">₹{{ profit_last_30|floatformat:0 }}</h4>
+                    </div>
+                </div>
+                <div id="profitChart" class="chart-sm"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="mb-1">Expenses</p>
+                        <h4 class="mb-0">{{ expenses_percent }}%</h4>
+                        <small class="text-muted">₹{{ expenses_last_30|floatformat:0 }}</small>
+                    </div>
+                    <div id="expensesChart" class="chart-xs"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="avatar me-3">
+                        <span class="avatar-initial rounded bg-label-warning"><i class="bx bx-transfer"></i></span>
+                    </div>
+                    <div>
+                        <p class="mb-1">Transactions</p>
+                        <h4 class="mb-0">{{ transactions_last_30 }}</h4>
+                        <small class="text-{% if transactions_change_percent >= 0 %}success{% else %}danger{% endif %}">
+                            {% if transactions_change_percent >= 0 %}+{% endif %}{{ transactions_change_percent }}%
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Total Income + Report -->
+<div class="row">
+    <div class="col-xl-8 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h5 class="mb-1">Total Income</h5>
+                        <small class="text-muted">Yearly report overview</small>
+                    </div>
+                </div>
+                <div id="totalIncomeChart" class="chart-lg"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="mb-3">Report</h6>
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-label-primary p-2 me-2"><i class="bx bx-wallet"></i></span>
+                        <div>
+                            <small class="text-muted">Income</small>
+                            <h6 class="mb-0">₹{{ report_income|floatformat:0 }}</h6>
+                        </div>
+                    </div>
+                    <small class="text-success">+{{ report_income_change }}%</small>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-label-danger p-2 me-2"><i class="bx bx-trending-down"></i></span>
+                        <div>
+                            <small class="text-muted">Expense</small>
+                            <h6 class="mb-0">₹{{ report_expense|floatformat:0 }}</h6>
+                        </div>
+                    </div>
+                    <small class="text-danger">-{{ expenses_percent }}%</small>
+                </div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-label-success p-2 me-2"><i class="bx bx-trending-up"></i></span>
+                        <div>
+                            <small class="text-muted">Profit</small>
+                            <h6 class="mb-0">₹{{ report_profit|floatformat:0 }}</h6>
+                        </div>
+                    </div>
+                    <small class="text-success">+{{ report_income_change }}%</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Order Statistics + Finance Tabs + Transactions -->
+<div class="row">
+    <!-- Order Statistics -->
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">Order Statistics</h6>
+                        <small class="text-muted">{{ total_sales_count }} Total Sales</small>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn p-0" type="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-dots-vertical-rounded"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="{% url 'admin_orders' %}">View Orders</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between mt-3">
+                    <div>
+                        <h3 class="mb-0">{{ total_orders }}</h3>
+                        <small class="text-muted">Total Orders</small>
+                    </div>
+                    <div id="orderStatisticsRadial" class="chart-sm"></div>
+                </div>
+
+                <ul class="list-unstyled mt-3 mb-0">
+                    {% for category in category_stats|slice:":4" %}
+                    <li class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-label-primary me-2" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;">
+                                <i class="bx bx-category"></i>
+                            </span>
+                            <div>
+                                <div class="fw-semibold">{{ category.name }}</div>
+                                <small class="text-muted">Products</small>
+                            </div>
+                        </div>
+                        <span class="fw-semibold">{{ category.count }}</span>
+                    </li>
+                    {% empty %}
+                    <li class="text-muted">No category data</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Finance Tabs -->
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <ul class="nav nav-pills mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#finance-income" type="button" role="tab">Income</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#finance-expenses" type="button" role="tab">Expenses</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#finance-profit" type="button" role="tab">Profit</button>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="finance-income" role="tabpanel">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge bg-label-primary p-2 me-2"><i class="bx bx-wallet"></i></span>
+                            <div>
+                                <small class="text-muted">Total Balance</small>
+                                <div class="fw-semibold">₹{{ total_revenue|floatformat:2 }}</div>
+                            </div>
+                        </div>
+                        <div id="financeChart" class="chart-md"></div>
+                    </div>
+                    <div class="tab-pane fade" id="finance-expenses" role="tabpanel">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge bg-label-danger p-2 me-2"><i class="bx bx-trending-down"></i></span>
+                            <div>
+                                <small class="text-muted">Total Expenses</small>
+                                <div class="fw-semibold">₹{{ expenses_last_30|floatformat:2 }}</div>
+                            </div>
+                        </div>
+                        <div id="financeExpenseChart" class="chart-md"></div>
+                    </div>
+                    <div class="tab-pane fade" id="finance-profit" role="tabpanel">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge bg-label-success p-2 me-2"><i class="bx bx-trending-up"></i></span>
+                            <div>
+                                <small class="text-muted">Total Profit</small>
+                                <div class="fw-semibold">₹{{ profit_last_30|floatformat:2 }}</div>
+                            </div>
+                        </div>
+                        <div id="financeProfitChart" class="chart-md"></div>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between mt-3">
+                    <div class="d-flex align-items-center">
+                        <div id="weeklyExpenseRadial" class="chart-xs me-2"></div>
+                        <div>
+                            <div class="fw-semibold">Expenses This Week</div>
+                            <small class="text-muted">₹{{ weekly_expense|floatformat:0 }} · {{ weekly_expense_percent }}%</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions -->
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0">Transactions</h6>
+                    <div class="dropdown">
+                        <button class="btn p-0" type="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-dots-vertical-rounded"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="{% url 'admin_orders' %}">View All</a>
+                        </div>
+                    </div>
+                </div>
+
+                <ul class="list-unstyled mb-0">
+                    {% for tx in recent_transactions %}
+                    <li class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-label-primary me-2" style="width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;">
+                                <i class="bx bx-credit-card"></i>
+                            </span>
+                            <div>
+                                <div class="fw-semibold">{{ tx.method }}</div>
+                                <small class="text-muted">{{ tx.label }}</small>
+                            </div>
+                        </div>
+                        <span class="fw-semibold {% if tx.status == 'PAID' %}text-success{% else %}text-danger{% endif %}">
+                            {% if tx.status == 'PAID' %}+{% else %}-{% endif %}₹{{ tx.amount|floatformat:2 }}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li class="text-muted">No transactions</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance + Conversion + Revenue + Target -->
+<div class="row">
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="mb-3">Performance</h6>
+                <div id="performanceChart" class="chart-md"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="mb-1">Conversion Rate</h6>
+                        <h4 class="mb-0">{{ conversion_rate }}%</h4>
+                        <small class="text-muted">Compared to last month</small>
+                    </div>
+                </div>
+                <div id="conversionChart" class="chart-sm mt-3"></div>
+                <ul class="list-unstyled mt-3 mb-0">
+                    <li class="d-flex justify-content-between mb-2"><span>Impressions</span><span>{{ impressions_count }}</span></li>
+                    <li class="d-flex justify-content-between mb-2"><span>Added to Cart</span><span>{{ cart_count }}</span></li>
+                    <li class="d-flex justify-content-between mb-2"><span>Checkout</span><span>{{ checkout_count }}</span></li>
+                    <li class="d-flex justify-content-between"><span>Purchased</span><span>{{ purchased_count }}</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="mb-1">Revenue</h6>
+                <h4 class="mb-0">₹{{ total_revenue|floatformat:0 }}</h4>
+                <small class="text-{% if revenue_growth_percent >= 0 %}success{% else %}danger{% endif %}">
+                    {% if revenue_growth_percent >= 0 %}+{% endif %}{{ revenue_growth_percent }}%
+                </small>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="mb-1">Sales Target</h6>
+                <h4 class="mb-2">₹{{ sales_target|floatformat:0 }}</h4>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar bg-primary" style="width: {{ sales_target_percent }}%"></div>
+                </div>
+                <small class="text-muted">{{ sales_target_percent }}% achieved</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Expenses Yearly + Controls -->
+<div class="row">
+    <div class="col-xl-8 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Expenses</h6>
+                    <span class="badge bg-label-secondary">{% now "Y" %}</span>
+                </div>
+                <div id="expensesYearlyChart" class="chart-lg"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="mb-3">User & System Controls</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-outline-secondary btn-sm"><i class="bx bx-globe"></i> Language</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="themeToggle"><i class="bx bx-moon"></i> Theme</button>
+                    <button class="btn btn-outline-secondary btn-sm"><i class="bx bx-bell"></i> Notifications</button>
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'profile' %}"><i class="bx bx-user"></i> Profile</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Orders Table (Image Layout) -->
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr class="text-uppercase text-muted" style="font-size: 12px; letter-spacing: .04em;">
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Payment</th>
+                                <th>Order Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in recent_order_items %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        {% if item.product and item.product.image %}
+                                            <img src="{{ item.product.image.url }}" alt="{{ item.product_name }}" class="me-2" style="width: 36px; height: 36px; object-fit: cover; border-radius: 6px;">
+                                        {% else %}
+                                            <div class="me-2" style="width: 36px; height: 36px; border-radius: 6px; background: #eef2ff; display: grid; place-items: center;">
+                                                <i class="bx bx-package"></i>
+                                            </div>
+                                        {% endif %}
+                                        <div>
+                                            <div class="fw-semibold">{{ item.product_name|truncatewords:3 }}</div>
+                                            <small class="text-muted">{{ item.product.brand|default:"" }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-label-primary me-2" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;">
+                                            <i class="bx bx-category"></i>
+                                        </span>
+                                        <span>
+                                            {% if item.product %}
+                                                {{ item.product.get_category_display|default:"Category" }}
+                                            {% else %}
+                                                Category
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">₹{{ item.order.total_amount|floatformat:0 }}</div>
+                                    <small class="text-muted">
+                                        {% if item.order.payment_status == 'PAID' %}Fully Paid{% else %}Unpaid{% endif %}
+                                    </small>
+                                </td>
+                                <td>
+                                    <span class="badge 
+                                        {% if item.order.order_status == 'DELIVERED' %}bg-label-success
+                                        {% elif item.order.order_status == 'SHIPPED' %}bg-label-info
+                                        {% elif item.order.order_status == 'PROCESSING' %}bg-label-primary
+                                        {% elif item.order.order_status == 'CANCELLED' %}bg-label-danger
+                                        {% else %}bg-label-warning{% endif %}">
+                                        {{ item.order.order_status|title }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="dropdown">
+                                        <button class="btn p-0" type="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            <i class="bx bx-dots-vertical-rounded"></i>
+                                        </button>
+                                        <div class="dropdown-menu dropdown-menu-end">
+                                            <a class="dropdown-item" href="{% url 'admin_order_details' item.order.id %}">View</a>
+                                            <a class="dropdown-item" href="{% url 'admin_orders' %}">All Orders</a>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">No recent orders found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'admin/assets/vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script>
+'use strict';
+
+(function () {
+    const colors = {
+        primary: '#696cff',
+        success: '#71dd37',
+        info: '#03c3ec',
+        warning: '#ffab00',
+        danger: '#ff3e1d',
+        axis: '#a1acb8'
+    };
+
+    const monthLabels = [
+        {% for label in month_labels %}'{{ label }}'{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const incomeSeries = [
+        {% for val in income_yearly_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const expenseSeries = [
+        {% for val in expense_yearly_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const visitorsSeries = [
+        {% for val in visitors_weekly_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const activitySeries = [
+        {% for val in activity_weekly_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const perfLabels = [
+        {% for label in perf_month_labels %}'{{ label }}'{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const perfIncomeSeries = [
+        {% for val in perf_income_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const perfSalesSeries = [
+        {% for val in perf_sales_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const financeLabels = [
+        {% for label in finance_labels %}'{{ label }}'{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const financeIncomeSeries = [
+        {% for val in finance_income_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const financeExpenseSeries = [
+        {% for val in finance_expense_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const financeProfitSeries = [
+        {% for val in finance_profit_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+
+    // New Visitors (bar)
+    const newVisitorsChartEl = document.querySelector('#newVisitorsChart');
+    if (newVisitorsChartEl) {
+        new ApexCharts(newVisitorsChartEl, {
+            series: [{ name: 'Visitors', data: visitorsSeries }],
+            chart: { type: 'bar', height: 120, sparkline: { enabled: true } },
+            plotOptions: { bar: { columnWidth: '45%', borderRadius: 4 } },
+            colors: [colors.info],
+            tooltip: { enabled: false }
+        }).render();
+    }
+
+    // Activity (line)
+    const activityChartEl = document.querySelector('#activityChart');
+    if (activityChartEl) {
+        new ApexCharts(activityChartEl, {
+            series: [{ name: 'Activity', data: activitySeries }],
+            chart: { type: 'line', height: 120, sparkline: { enabled: true } },
+            stroke: { width: 3, curve: 'smooth' },
+            colors: [colors.success],
+            tooltip: { enabled: false }
+        }).render();
+    }
+
+    // Profit (mini bar)
+    const profitChartEl = document.querySelector('#profitChart');
+    if (profitChartEl) {
+        const profitSeries = perfIncomeSeries.map(val => Math.round(val * 0.28));
+        new ApexCharts(profitChartEl, {
+            series: [{ name: 'Profit', data: profitSeries }],
+            chart: { type: 'bar', height: 120, sparkline: { enabled: true } },
+            plotOptions: { bar: { columnWidth: '50%', borderRadius: 3 } },
+            colors: [colors.success],
+            tooltip: { enabled: false }
+        }).render();
+    }
+
+    // Expenses (donut)
+    const expensesChartEl = document.querySelector('#expensesChart');
+    if (expensesChartEl) {
+        new ApexCharts(expensesChartEl, {
+            series: [{{ expenses_percent }}, {{ expenses_remaining_percent }}],
+            chart: { type: 'donut', height: 90, width: 90 },
+            labels: ['Expenses', 'Remaining'],
+            colors: [colors.danger, '#e7e9ed'],
+            stroke: { width: 0 },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            tooltip: { enabled: false }
+        }).render();
+    }
+
+    // Total Income (area)
+    const totalIncomeChartEl = document.querySelector('#totalIncomeChart');
+    if (totalIncomeChartEl) {
+        new ApexCharts(totalIncomeChartEl, {
+            series: [{ name: 'Income', data: incomeSeries }],
+            chart: { type: 'area', height: 320, toolbar: { show: false } },
+            colors: [colors.primary],
+            dataLabels: { enabled: false },
+            stroke: { curve: 'smooth', width: 3 },
+            xaxis: { categories: monthLabels, labels: { style: { colors: colors.axis } } },
+            yaxis: { labels: { style: { colors: colors.axis } } },
+            grid: { borderColor: '#eceef1' }
+        }).render();
+    }
+
+    // Order Statistics (radial)
+    const orderStatisticsRadialEl = document.querySelector('#orderStatisticsRadial');
+    if (orderStatisticsRadialEl) {
+        new ApexCharts(orderStatisticsRadialEl, {
+            series: [{{ order_statistics_percent }}],
+            chart: { type: 'radialBar', height: 140, sparkline: { enabled: true } },
+            plotOptions: {
+                radialBar: {
+                    hollow: { size: '60%' },
+                    dataLabels: {
+                        value: { fontSize: '18px' }
+                    }
+                }
+            },
+            colors: [colors.success]
+        }).render();
+    }
+
+    // Finance Tabs (line)
+    const financeChartEl = document.querySelector('#financeChart');
+    if (financeChartEl) {
+        new ApexCharts(financeChartEl, {
+            series: [{ name: 'Income', data: financeIncomeSeries }],
+            chart: { type: 'line', height: 220, toolbar: { show: false } },
+            stroke: { curve: 'smooth', width: 3 },
+            colors: [colors.primary],
+            dataLabels: { enabled: false },
+            xaxis: { categories: financeLabels, labels: { style: { colors: colors.axis } } },
+            yaxis: { labels: { style: { colors: colors.axis } } },
+            grid: { borderColor: '#eceef1' }
+        }).render();
+    }
+    const financeExpenseChartEl = document.querySelector('#financeExpenseChart');
+    if (financeExpenseChartEl) {
+        new ApexCharts(financeExpenseChartEl, {
+            series: [{ name: 'Expenses', data: financeExpenseSeries }],
+            chart: { type: 'line', height: 220, toolbar: { show: false } },
+            stroke: { curve: 'smooth', width: 3 },
+            colors: [colors.danger],
+            dataLabels: { enabled: false },
+            xaxis: { categories: financeLabels, labels: { style: { colors: colors.axis } } },
+            yaxis: { labels: { style: { colors: colors.axis } } },
+            grid: { borderColor: '#eceef1' }
+        }).render();
+    }
+    const financeProfitChartEl = document.querySelector('#financeProfitChart');
+    if (financeProfitChartEl) {
+        new ApexCharts(financeProfitChartEl, {
+            series: [{ name: 'Profit', data: financeProfitSeries }],
+            chart: { type: 'line', height: 220, toolbar: { show: false } },
+            stroke: { curve: 'smooth', width: 3 },
+            colors: [colors.success],
+            dataLabels: { enabled: false },
+            xaxis: { categories: financeLabels, labels: { style: { colors: colors.axis } } },
+            yaxis: { labels: { style: { colors: colors.axis } } },
+            grid: { borderColor: '#eceef1' }
+        }).render();
+    }
+
+    // Weekly Expense (radial)
+    const weeklyExpenseRadialEl = document.querySelector('#weeklyExpenseRadial');
+    if (weeklyExpenseRadialEl) {
+        new ApexCharts(weeklyExpenseRadialEl, {
+            series: [{{ weekly_expense_percent }}],
+            chart: { type: 'radialBar', height: 90, sparkline: { enabled: true } },
+            plotOptions: {
+                radialBar: {
+                    hollow: { size: '60%' },
+                    dataLabels: { value: { fontSize: '14px' } }
+                }
+            },
+            colors: [colors.primary]
+        }).render();
+    }
+
+    // Performance (radar)
+    const performanceChartEl = document.querySelector('#performanceChart');
+    if (performanceChartEl) {
+        new ApexCharts(performanceChartEl, {
+            series: [
+                { name: 'Earnings', data: perfIncomeSeries },
+                { name: 'Sales', data: perfSalesSeries }
+            ],
+            chart: { type: 'radar', height: 220, toolbar: { show: false } },
+            colors: [colors.primary, colors.info],
+            xaxis: { categories: perfLabels },
+            stroke: { width: 2 }
+        }).render();
+    }
+
+    // Conversion (sparkline line)
+    const conversionChartEl = document.querySelector('#conversionChart');
+    if (conversionChartEl) {
+        const funnelSeries = [{{ impressions_count }}, {{ cart_count }}, {{ checkout_count }}, {{ purchased_count }}];
+        new ApexCharts(conversionChartEl, {
+            series: [{ name: 'Conversion', data: funnelSeries }],
+            chart: { type: 'line', height: 120, sparkline: { enabled: true } },
+            stroke: { curve: 'smooth', width: 3 },
+            colors: [colors.warning],
+            tooltip: { enabled: false }
+        }).render();
+    }
+
+    // Expenses Yearly (bar)
+    const expensesYearlyChartEl = document.querySelector('#expensesYearlyChart');
+    if (expensesYearlyChartEl) {
+        new ApexCharts(expensesYearlyChartEl, {
+            series: [{ name: 'Expenses', data: expenseSeries }],
+            chart: { type: 'bar', height: 320, toolbar: { show: false } },
+            plotOptions: { bar: { columnWidth: '45%', borderRadius: 6 } },
+            colors: [colors.info],
+            dataLabels: { enabled: false },
+            xaxis: { categories: monthLabels, labels: { style: { colors: colors.axis } } },
+            yaxis: { labels: { style: { colors: colors.axis } } },
+            grid: { borderColor: '#eceef1' }
+        }).render();
+    }
+
+    // Theme toggle (basic)
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function () {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'theme-dark';
+            html.setAttribute('data-theme', isDark ? 'theme-default' : 'theme-dark');
+        });
+    }
+
+    // Auto refresh dashboard every 5 minutes
+    setTimeout(function(){
+        location.reload();
+    }, 300000);
+})();
+</script>
+{% endblock %}

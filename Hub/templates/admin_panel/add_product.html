@@ -1,0 +1,198 @@
+﻿{% extends 'admin_panel/base_admin.html' %}
+{% load static %}
+
+{% block title %}Add Product - FashioHub Admin{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Products /</span> Add New Product</h4>
+
+<!-- Display messages -->
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="row">
+    <!-- Basic Information -->
+    <div class="col-xl-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Basic Information</h5>
+                <small class="text-muted float-end">Required fields *</small>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="name">Product Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" placeholder="Enter product name" required />
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="price">Price *</label>
+                            <div class="input-group input-group-merge">
+                                <span class="input-group-text">&#8377;</span>
+                                <input type="number" step="0.01" class="form-control" id="price" name="price" placeholder="0.00" required />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="old_price">Old Price (Compare at)</label>
+                            <div class="input-group input-group-merge">
+                                <span class="input-group-text">&#8377;</span>
+                                <input type="number" step="0.01" class="form-control" id="old_price" name="old_price" placeholder="0.00" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="description">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="4" placeholder="Enter product description"></textarea>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="sku">SKU</label>
+                            <input type="text" class="form-control" id="sku" name="sku" placeholder="Product SKU" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="brand">Brand</label>
+                            <input type="text" class="form-control" id="brand" name="brand" placeholder="Brand name" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="category">Category</label>
+                            <select id="category" name="category" class="form-select">
+                                <option value="">Select Category</option>
+                                <option value="TOP_DEALS">Top Deals</option>
+                                <option value="TOP_SELLING">Top Selling</option>
+                                <option value="TOP_FEATURED">Top Featured</option>
+                                <option value="RECOMMENDED">Recommended</option>
+                                <option value="MEN">Men</option>
+                                <option value="WOMEN">Women</option>
+                                <option value="KIDS">Kids</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="stock">Stock</label>
+                            <input type="number" class="form-control" id="stock" name="stock" placeholder="Available quantity" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="color">Color</label>
+                            <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Red, Blue" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="size">Size</label>
+                            <input type="text" class="form-control" id="size" name="size" placeholder="e.g., S, M, L, XL" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="weight">Weight</label>
+                            <input type="text" class="form-control" id="weight" name="weight" placeholder="e.g., 500g" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="dimensions">Dimensions</label>
+                            <input type="text" class="form-control" id="dimensions" name="dimensions" placeholder="L x W x H" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="tags">Tags (comma separated)</label>
+                            <input type="text" class="form-control" id="tags" name="tags" placeholder="fashion, summer, sale" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="shipping_info">Shipping Information</label>
+                        <textarea class="form-control" id="shipping_info" name="shipping_info" rows="2" placeholder="Shipping details"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="care_info">Care Instructions</label>
+                        <textarea class="form-control" id="care_info" name="care_info" rows="2" placeholder="Care instructions"></textarea>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="rating">Rating (0-5)</label>
+                            <input type="number" step="0.1" min="0" max="5" class="form-control" id="rating" name="rating" placeholder="4.5" value="0" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="review_count">Review Count</label>
+                            <input type="number" class="form-control" id="review_count" name="review_count" placeholder="0" value="0" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="image">Main Product Image</label>
+                        <input class="form-control" type="file" id="image" name="image" accept="image/*" />
+                        <small class="text-muted">Recommended: 800x800px</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="gallery_images">Gallery Images (Multiple)</label>
+                        <input class="form-control" type="file" id="gallery_images" name="gallery_images" accept="image/*" multiple />
+                        <small class="text-muted">You can select multiple images</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked />
+                            <label class="form-check-label" for="is_active">Active (Visible on website)</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_top_deal" name="is_top_deal" />
+                            <label class="form-check-label" for="is_top_deal">Mark as Top Deal</label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Add Product</button>
+                    <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Guide -->
+    <div class="col-xl-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="card-title">Quick Guide</h6>
+                <p class="card-text">
+                    <small class="text-muted">
+                        <strong>Product Name:</strong> Use clear, descriptive names.<br><br>
+                        <strong>Price:</strong> Set competitive pricing.<br><br>
+                        <strong>Images:</strong> Use high-quality images for better customer experience.<br><br>
+                        <strong>Description:</strong> Detailed descriptions increase sales.<br><br>
+                        <strong>Category:</strong> Proper categorization helps customers find products.<br><br>
+                        <strong>Active:</strong> Uncheck to hide product from website.
+                    </small>
+                </p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">Image Guidelines</h6>
+                <ul class="list-unstyled mb-0">
+                    <li><small class="text-muted">✓ Size: 800x800px or larger</small></li>
+                    <li><small class="text-muted">✓ Format: JPG, PNG, WEBP</small></li>
+                    <li><small class="text-muted">✓ Background: White or transparent</small></li>
+                    <li><small class="text-muted">✓ Quality: High resolution</small></li>
+                    <li><small class="text-muted">✓ Multiple angles in gallery</small></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

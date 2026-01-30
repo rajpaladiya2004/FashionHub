@@ -1,37 +1,22 @@
-{% load static %}
+﻿{% load static %}
 <header class="header d-blue-bg">
     <div class="header-top">
         <div class="container">
             <div class="header-inner">
                 <div class="row align-items-center">
                     <div class="col-xl-6 col-lg-7">
-                        <div class="header-inner-start">
-                            <div class="header__currency border-right">
-                                <div class="s-name">
-                                    <span>Language: </span>
-                                </div>
-                                <select>
-                                    <option>English</option>
-                                    <option>Deutsch</option>
-                                    <option>Français</option>
-                                    <option>Espanol</option>
-                                </select>
-                            </div>
-                            <div class="header__lang border-right">
-                                <div class="s-name">
-                                    <span>Currency: </span>
-                                </div>
-                                <select>
-                                    <option> USD</option>
-                                    <option>EUR</option>
-                                    <option>INR</option>
-                                    <option>BDT</option>
-                                    <option>BGD</option>
-                                </select>
-                            </div>
-                            <div class="support d-none d-sm-block">
-                                <p>Need Help? <a href="tel:+001123456789">+001 123 456 789</a></p>
-                            </div>
+                        <div class="main-menu">
+                            <nav>
+                                <ul>
+                                    <li>
+                                        <a href="{% url 'index' %}" class="active">Home </a>
+                                    </li>
+                                    <li><a href="{% url 'about' %}">About Us</a></li>
+                                    <li><a href="{% url 'shop' %}">Shop</a></li>
+                                    <li><a href="{% url 'blog' %}">Blog</a></li>
+                                    <li><a href="{% url 'contact' %}">Contact</a></li>
+                                </ul>
+                            </nav>
                         </div>
                     </div>
                     <div class="col-xl-6 col-lg-5 d-none d-lg-block">
@@ -114,22 +99,10 @@
                             {% endif %}
                     </div>
 
-                    {% if user.username == 'FashionHub' %}
-                    <div class="block-userlink">
-                        <a class="icon-link" href="{% url 'add_product' %}" style="background-color: #fcbe00; padding: 10px 20px; border-radius: 5px; color: #1a1a1a; font-weight: 600; text-decoration: none; display: inline-block; margin-left: 10px;">
-                            <i class="flaticon-add" style="margin-right: 5px;"></i>
-                            <span class="text" style="color: #1a1a1a;">
-                                <span class="sub" style="color: #1a1a1a;">Admin</span>
-                                Add Product
-                            </span>
-                        </a>
-                    </div>
-                    {% endif %}
-
                             <div class="block-wishlist action">
                                 <a class="icon-link" href="{% url 'wishlist' %}">
                                 <i class="flaticon-heart"></i>
-                                <span class="count">0</span>
+                                <span class="count wishlist-count">{{ wishlist_count|default:"0" }}</span>
                                 <span class="text">
                                 <span class="sub">Favorite</span>
                                 My Wishlist </span>
@@ -141,7 +114,7 @@
                                 <span class="count">{{ cart_count }}</span>
                                 <span class="text">
                                 <span class="sub">Your Cart:</span>
-                                ${{ cart_total|default:"0.00" }} </span>
+                                &#8377;{{ cart_total|default:"0.00" }} </span>
                                 </a>
                                 <div class="cart">
                                     <div class="cart__mini">
@@ -169,12 +142,14 @@
                                                             <div class="cart__details">
                                                                 <h6><a href="{% url 'product-details' item.product.id %}">{{ item.product.name }} x{{ item.quantity }}</a></h6>
                                                                 <div class="cart__price">
-                                                                    <span>${{ item.get_total_price }}</span>
+                                                                    <span>&#8377;{{ item.get_total_price }}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                         <div class="cart__del">
-                                                            <a href="{% url 'remove_from_cart' item.id %}"><i class="fal fa-times"></i></a>
+                                                            {% if item.id %}
+                                                                <a href="{% url 'remove_from_cart' item.id %}"><i class="fal fa-times"></i></a>
+                                                            {% endif %}
                                                         </div>
                                                     </div>
                                                 </li>
@@ -189,7 +164,7 @@
                                             <li>
                                                 <div class="cart__sub d-flex justify-content-between align-items-center">
                                                     <h6>Subtotal</h6>
-                                                    <span class="cart__sub-total">${{ cart_total|default:"0.00" }}</span>
+                                                    <span class="cart__sub-total">&#8377;{{ cart_total|default:"0.00" }}</span>
                                                 </div>
                                             </li>
                                             <li>
@@ -497,9 +472,7 @@
                                         <a href="{% url 'about' %}">Pages <i class="far fa-angle-down"></i></a>
                                         <ul class="submenu">
                                             <li><a href="{% url 'profile' %}">My Account</a></li>
-                                            {% if user.username == 'FashionHub' %}
-                                            <li><a href="{% url 'add_product' %}" style="color: #fcbe00; font-weight: 600;">➕ Add Product</a></li>
-                                            {% endif %}
+                                            <li><a href="{% url 'order_list' %}">My Orders</a></li>
                                             <li><a href="{% url 'product-details' %}">Product Details</a></li>
                                             <li><a href="{% url 'faq' %}">FAQs pages</a></li>
                                             <li><a href="{% url 'cart' %}">Cart</a></li>
@@ -509,6 +482,17 @@
                                             <li><a href="{% url '404' %}">404 Error</a></li>
                                         </ul>
                                     </li>
+                                    {% if user.is_staff %}
+                                    <li>
+                                        <a href="javascript:void(0);">Admin <i class="far fa-angle-down"></i></a>
+                                        <ul class="submenu">
+                                            <li><a href="{% url 'admin_dashboard' %}"><i class="fal fa-tachometer-alt"></i> Dashboard</a></li>
+                                            <li><a href="{% url 'admin_add_product' %}"><i class="fal fa-plus-circle"></i> Add Product</a></li>
+                                            <li><a href="{% url 'admin_product_list' %}"><i class="fal fa-list"></i> Product List</a></li>
+                                            <li><a href="{% url 'admin_reviews' %}"><i class="fal fa-star"></i> Manage Reviews</a></li>
+                                        </ul>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </nav>
                         </div>
@@ -516,7 +500,7 @@
                 </div>
                 <div class="col-lg-3 col-md-6 col-9">
                     <div class="shopeing-text text-sm-end">
-                        <p>Spend $120 more and get free shipping!</p>
+                        <p>Spend &#8377;1200 more and get free shipping!</p>
                     </div>
                 </div>
             </div>

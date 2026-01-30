@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% load static %}
 
@@ -79,7 +79,7 @@
                                           </a>
                                        </td>
                                        <td class="product-name"><a href="#">{{ item.product.name }}</a></td>
-                                       <td class="product-price"><span class="amount">${{ item.product.price }}</span></td>
+                                       <td class="product-price"><span class="amount">&#8377;{{ item.product.price }}</span></td>
                                        <td class="product-quantity">
                                              <form method="POST" action="{% url 'update_cart_quantity' item.id %}" style="display: inline;">
                                                 {% csrf_token %}
@@ -89,7 +89,7 @@
                                                 </div>
                                              </form>
                                        </td>
-                                       <td class="product-subtotal"><span class="amount">${{ item.get_total_price }}</span></td>
+                                       <td class="product-subtotal"><span class="amount">&#8377;{{ item.get_total_price }}</span></td>
                                        <td class="product-remove">
                                           <a href="{% url 'remove_from_cart' item.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Remove this item?');">
                                              <i class="fa fa-times"></i>
@@ -118,8 +118,8 @@
                                  <div class="cart-page-total">
                                     <h2>Cart Totals</h2>
                                     <ul class="mb-20">
-                                       <li>Subtotal <span>${{ total_price }}</span></li>
-                                       <li>Total <span>${{ total_price }}</span></li>
+                                       <li>Subtotal <span>&#8377;{{ total_price }}</span></li>
+                                       <li>Total <span>&#8377;{{ total_price }}</span></li>
                                     </ul>
                                     <a class="tp-btn-h1 w-100 text-center" href="{% url 'checkout' %}">Proceed to Checkout</a>
                                  </div>

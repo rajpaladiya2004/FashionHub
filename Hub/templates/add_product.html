@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% load static %}
 
 {% block title %}Add Product - FashionHub{% endblock %}
@@ -391,6 +391,12 @@
                                 <textarea name="description" id="description" placeholder="Enter detailed product description including features, benefits, specifications, and usage instructions..."></textarea>
                                 <div class="field-hint">Helps customers understand the product better and improves SEO</div>
                             </div>
+                            
+                            <div class="form-group">
+                                <label for="descriptionImage">Description Image (Large Display Image)</label>
+                                <input type="file" name="descriptionImage" id="descriptionImage" accept="image/*">
+                                <div class="field-hint">Upload a large image to display below product description (Recommended: 1200x800px)</div>
+                            </div>
                         </div>
 
                         <!-- 5. Product Specifications Section -->
@@ -437,7 +443,7 @@
                             <div class="form-row-2">
                                 <div class="form-group">
                                     <label for="shipping_info">Shipping Information</label>
-                                    <input type="text" name="shipping_info" id="shipping_info" placeholder="e.g., Free shipping on orders over $50">
+                                    <input type="text" name="shipping_info" id="shipping_info" placeholder="e.g., Free shipping on orders over &#8377;500">
                                     <div class="field-hint">Shipping methods and costs</div>
                                 </div>
 
@@ -485,7 +491,7 @@
                                     <br><small style="color: #999;">SKU: {{ product.sku }}</small>
                                     {% endif %}
                                 </td>
-                                <td style="text-align: center; font-weight: 600;">${{ product.price }}</td>
+                                <td style="text-align: center; font-weight: 600;">&#8377;{{ product.price }}</td>
                                 <td style="text-align: center;">
                                     {% if product.stock > 20 %}
                                         <span style="background: #d4edda; color: #155724; padding: 4px 10px; border-radius: 4px; font-weight: 600; font-size: 12px;">{{ product.stock }} units</span>

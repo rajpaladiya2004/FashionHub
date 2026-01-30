@@ -1,4 +1,4 @@
-
+﻿
 {% load static %}
 
 <!DOCTYPE html>
@@ -25,9 +25,18 @@
 <link rel="stylesheet" href="{% static 'assets/css/font-awesome-pro.css' %}">
 <link rel="stylesheet" href="{% static 'assets/css/default.css' %}">
 <link rel="stylesheet" href="{% static 'assets/css/style.css' %}">
+<link rel="stylesheet" href="{% static 'assets/css/custom-fixes.css' %}">
 </head>
 </head>
 <body>
+
+<!-- Pass user authentication status to JavaScript -->
+<script>
+    var userAuthenticated = {% if user.is_authenticated %}true{% else %}false{% endif %};
+    {% if user.is_authenticated %}
+    var wishlistProductIds = {{ wishlist_product_ids|safe }};
+    {% endif %}
+</script>
 
       <div id="loading">
         <div id="loading-center">
@@ -142,6 +151,152 @@
         <script src="{% static 'assets/js/isotope-pkgd.js' %}"></script>
         <script src="{% static 'assets/js/imagesloaded-pkgd.js' %}"></script>
         <script src="{% static 'assets/js/ajax-form.js' %}"></script>
-        <script src="{% static 'assets/js/main.js' %}"></script
+        <script src="{% static 'assets/js/main.js' %}"></script>
+        <script src="{% static 'assets/js/custom-fixes.js' %}"></script>
+        
+        <style>
+            /* Buy Now Button for Product Cards */
+            .buy-now-btn-card {
+                padding: 12px 20px;
+                background: linear-gradient(135deg, #fcbe00 0%, #ffa500 100%);
+                color: #111827;
+                border: none;
+                border-radius: 8px;
+                font-weight: 700;
+                font-size: 14px;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(252, 190, 0, 0.3);
+            }
+            .buy-now-btn-card:hover {
+                background: linear-gradient(135deg, #ffa500 0%, #fcbe00 100%);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(252, 190, 0, 0.4);
+                color: #000;
+            }
+            .buy-now-btn-card:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                transform: none;
+            }
+        </style>
+        
+        <script>
+            // Buy Now for Product Cards
+            function getCsrfToken() {
+                const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+                return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
+            }
+
+            async function buyNowCard(productId) {
+                // Check if user is logged in
+                if (!userAuthenticated) {
+                    window.location.href = "/login/?next=" + window.location.pathname;
+                    return;
+                }
+
+                const url = `/buy-now/${productId}/`;
+                const csrftoken = getCsrfToken();
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrftoken,
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: 'quantity=1'
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        // Redirect to cart
+                        window.location.href = data.redirect_url || '/cart/';
+                    } else {
+                        alert(data.message || 'Failed to process order');
+                    }
+                } catch (error) {
+                    console.error('Buy Now error:', error);
+                    alert('An error occurred. Please try again.');
+                }
+            }
+
+            // Toggle Wishlist for Product Cards
+            async function toggleWishlistCard(productId, button) {
+                // Check if user is logged in
+                if (!userAuthenticated) {
+                    window.location.href = "/login/?next=" + window.location.pathname;
+                    return;
+                }
+
+                const url = `/ajax-add-to-wishlist/${productId}/`;
+                const csrftoken = getCsrfToken();
+                const icon = button.querySelector('i');
+                const isWishlisted = icon.classList.contains('fas');
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrftoken,
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        // Toggle icon
+                        if (data.in_wishlist) {
+                            icon.classList.remove('fal');
+                            icon.classList.add('fas');
+                            button.style.color = '#ff4757';
+                        } else {
+                            icon.classList.remove('fas');
+                            icon.classList.add('fal');
+                            button.style.color = '';
+                        }
+                    } else {
+                        alert(data.message || 'Failed to update wishlist');
+                    }
+                } catch (error) {
+                    console.error('Wishlist toggle error:', error);
+                    alert('An error occurred. Please try again.');
+                }
+            }
+
+            // Check wishlist status on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                if (userAuthenticated) {
+                    const wishlistButtons = document.querySelectorAll('.wishlist-btn-card');
+                    wishlistButtons.forEach(button => {
+                        const productId = button.getAttribute('onclick').match(/\d+/)[0];
+                        checkWishlistStatus(productId, button);
+                    });
+                }
+            });
+
+            async function checkWishlistStatus(productId, button) {
+                try {
+                    const response = await fetch(`/check-wishlist/${productId}/`, {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.in_wishlist) {
+                        const icon = button.querySelector('i');
+                        icon.classList.remove('fal');
+                        icon.classList.add('fas');
+                        button.style.color = '#ff4757';
+                    }
+                } catch (error) {
+                    console.error('Check wishlist error:', error);
+                }
+            }
+        </script>
 </body>
 </html>

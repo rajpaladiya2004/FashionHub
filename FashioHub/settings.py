@@ -49,6 +49,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'Hub.middleware.BlockedUserMiddleware',  # Block users who are marked as blocked
     # 'livereload.middleware.LiveReloadScript',  # Commented out - not needed
 ]
 
@@ -143,3 +144,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Razorpay Settings (Add your keys here)
+RAZORPAY_KEY_ID = 'your_razorpay_key_id'
+RAZORPAY_KEY_SECRET = 'your_razorpay_key_secret'

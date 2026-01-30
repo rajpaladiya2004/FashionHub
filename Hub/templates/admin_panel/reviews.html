@@ -1,0 +1,345 @@
+﻿{% extends 'admin_panel/base_admin.html' %}
+{% load static %}
+
+{% block title %}Manage Reviews - FashioHub Admin{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold py-3 mb-4">
+    <span class="text-muted fw-light">Reviews /</span> Manage Reviews
+</h4>
+
+<!-- Display messages -->
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-lg-4 col-md-6 col-sm-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="card-title d-flex align-items-start justify-content-between">
+                    <div class="avatar flex-shrink-0">
+                        <img src="{% static 'admin/assets/img/icons/unicons/chart-success.png' %}" alt="Total" class="rounded" />
+                    </div>
+                </div>
+                <span class="fw-semibold d-block mb-1">Total Reviews</span>
+                <h3 class="card-title mb-2">{{ total_reviews }}</h3>
+                <small class="text-muted">All reviews</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 col-md-6 col-sm-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="card-title d-flex align-items-start justify-content-between">
+                    <div class="avatar flex-shrink-0">
+                        <img src="{% static 'admin/assets/img/icons/unicons/wallet-info.png' %}" alt="Pending" class="rounded" />
+                    </div>
+                </div>
+                <span class="fw-semibold d-block mb-1">Pending Reviews</span>
+                <h3 class="card-title text-nowrap mb-1">{{ pending_reviews }}</h3>
+                <small class="text-warning fw-semibold">Awaiting approval</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 col-md-6 col-sm-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="card-title d-flex align-items-start justify-content-between">
+                    <div class="avatar flex-shrink-0">
+                        <img src="{% static 'admin/assets/img/icons/unicons/cc-success.png' %}" alt="Approved" class="rounded" />
+                    </div>
+                </div>
+                <span class="fw-semibold d-block mb-1">Approved Reviews</span>
+                <h3 class="card-title text-nowrap mb-1">{{ approved_reviews }}</h3>
+                <small class="text-success fw-semibold">Published</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reviews Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">All Reviews</h5>
+        
+        <!-- Filter Buttons -->
+        <div class="btn-group" role="group">
+            <a href="?status=all" class="btn btn-sm {% if filter_status == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                All ({{ total_reviews }})
+            </a>
+            <a href="?status=pending" class="btn btn-sm {% if filter_status == 'pending' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                Pending ({{ pending_reviews }})
+            </a>
+            <a href="?status=approved" class="btn btn-sm {% if filter_status == 'approved' %}btn-success{% else %}btn-outline-success{% endif %}">
+                Approved ({{ approved_reviews }})
+            </a>
+        </div>
+    </div>
+    
+    <div class="card-body">
+        <form method="POST" id="bulkActionForm">
+            {% csrf_token %}
+            
+            <!-- Bulk Actions -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <select name="action" class="form-select" style="max-width: 200px;">
+                            <option value="">Bulk Actions</option>
+                            <option value="approve">Approve Selected</option>
+                            <option value="reject">Reject Selected</option>
+                            <option value="delete">Delete Selected</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('Are you sure you want to perform this action?')">Apply</button>
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAll()">
+                        <i class='bx bx-check-square'></i> Select All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">
+                        <i class='bx bx-square'></i> Deselect All
+                    </button>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAllCheckbox" onclick="toggleAll(this)"></th>
+                            <th>ID</th>
+                            <th>Product</th>
+                            <th>Customer</th>
+                            <th>Rating</th>
+                            <th>Comment</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for review in reviews %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="review_ids" value="{{ review.id }}" class="review-checkbox">
+                            </td>
+                            <td><strong>#{{ review.id }}</strong></td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% if review.product.image %}
+                                        <img src="{{ review.product.image.url }}" alt="{{ review.product.name }}" class="me-2" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">
+                                    {% endif %}
+                                    <div>
+                                        <a href="{% url 'product-details' review.product.id %}" target="_blank" class="text-decoration-none">
+                                            {{ review.product.name|truncatewords:4 }}
+                                        </a>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ review.name }}</strong><br>
+                                    <small class="text-muted">{{ review.email }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="text-warning">
+                                    {% for i in "12345" %}
+                                        {% if forloop.counter <= review.rating %}
+                                            <i class='bx bxs-star'></i>
+                                        {% else %}
+                                            <i class='bx bx-star'></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <br>
+                                    <small class="text-muted">({{ review.rating }}/5)</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="max-width: 250px;">
+                                    {{ review.comment|truncatewords:15 }}
+                                </div>
+                            </td>
+                            <td>
+                                <small>{{ review.created_at|date:"M d, Y" }}</small><br>
+                                <small class="text-muted">{{ review.created_at|time:"h:i A" }}</small>
+                            </td>
+                            <td>
+                                {% if review.is_approved %}
+                                    <span class="badge bg-label-success">Approved</span>
+                                {% else %}
+                                    <span class="badge bg-label-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="dropdown">
+                                    <button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
+                                        <i class="bx bx-dots-vertical-rounded"></i>
+                                    </button>
+                                    <div class="dropdown-menu">
+                                        <a class="dropdown-item" href="javascript:void(0);" onclick="viewReview({{ review.id }})">
+                                            <i class="bx bx-show me-1"></i> View Full Review
+                                        </a>
+                                        {% if not review.is_approved %}
+                                        <a class="dropdown-item" href="javascript:void(0);" onclick="quickApprove({{ review.id }})">
+                                            <i class="bx bx-check me-1"></i> Approve
+                                        </a>
+                                        {% else %}
+                                        <a class="dropdown-item" href="javascript:void(0);" onclick="quickReject({{ review.id }})">
+                                            <i class="bx bx-x me-1"></i> Reject
+                                        </a>
+                                        {% endif %}
+                                        <a class="dropdown-item text-danger" href="javascript:void(0);" onclick="deleteReview({{ review.id }})">
+                                            <i class="bx bx-trash me-1"></i> Delete
+                                        </a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5">
+                                <i class='bx bx-comment-x' style="font-size: 48px; color: #ccc;"></i>
+                                <p class="text-muted mt-2">No reviews found.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Pagination -->
+    {% if reviews.has_other_pages %}
+    <div class="card-footer">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                {% if reviews.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?status={{ filter_status }}&page=1">First</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?status={{ filter_status }}&page={{ reviews.previous_page_number }}">Previous</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Previous</span>
+                    </li>
+                {% endif %}
+                
+                <li class="page-item active">
+                    <span class="page-link">
+                        Page {{ reviews.number }} of {{ reviews.paginator.num_pages }}
+                    </span>
+                </li>
+                
+                {% if reviews.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?status={{ filter_status }}&page={{ reviews.next_page_number }}">Next</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?status={{ filter_status }}&page={{ reviews.paginator.num_pages }}">Last</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Next</span>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- View Review Modal -->
+<div class="modal fade" id="viewReviewModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Review Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="reviewModalContent">
+                <!-- Content loaded via JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleAll(source) {
+    const checkboxes = document.querySelectorAll('.review-checkbox');
+    checkboxes.forEach(checkbox => checkbox.checked = source.checked);
+}
+
+function selectAll() {
+    document.querySelectorAll('.review-checkbox').forEach(cb => cb.checked = true);
+    document.getElementById('selectAllCheckbox').checked = true;
+}
+
+function deselectAll() {
+    document.querySelectorAll('.review-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('selectAllCheckbox').checked = false;
+}
+
+function quickApprove(reviewId) {
+    if (confirm('Approve this review?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            {% csrf_token %}
+            <input type="hidden" name="action" value="approve">
+            <input type="hidden" name="review_ids" value="${reviewId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function quickReject(reviewId) {
+    if (confirm('Reject this review?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reject">
+            <input type="hidden" name="review_ids" value="${reviewId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function deleteReview(reviewId) {
+    if (confirm('Are you sure you want to delete this review? This action cannot be undone.')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="review_ids" value="${reviewId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function viewReview(reviewId) {
+    // This would require an AJAX endpoint to fetch review details
+    const modal = new bootstrap.Modal(document.getElementById('viewReviewModal'));
+    document.getElementById('reviewModalContent').innerHTML = '<p class="text-center">Loading...</p>';
+    modal.show();
+}
+</script>
+{% endblock %}

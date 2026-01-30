@@ -1,4 +1,4 @@
-
+﻿
 
 {% extends "base.html" %}
 
@@ -79,7 +79,7 @@
                                             </a>
                                         </td>
                                         <td class="product-name"><a href="#">{{ item.product.name }}</a></td>
-                                        <td class="product-price"><span class="amount">${{ item.product.price }}</span></td>
+                                        <td class="product-price"><span class="amount">&#8377;{{ item.product.price }}</span></td>
                                         <td class="product-quantity">
                                             {% if item.product.stock > 0 %}
                                                 <span class="badge bg-success">In Stock</span>
