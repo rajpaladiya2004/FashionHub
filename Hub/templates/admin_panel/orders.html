@@ -55,12 +55,12 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold">📦 Orders Management</h4>
         <div>
-            <a href="?export=csv" class="btn btn-outline-success btn-sm me-2">
+            <a href="?export=csv{{ request.GET.urlencode|safe|slice:'1:' }}" class="btn btn-outline-success btn-sm me-2">
                 <i class='bx bx-download'></i> Export CSV
             </a>
-            <button type="button" class="btn btn-success btn-sm" onclick="document.getElementById('bulkExportForm').submit();">
+            <a href="?export=excel{{ request.GET.urlencode|safe|slice:'1:' }}" class="btn btn-success btn-sm">
                 <i class='bx bx-file'></i> Export Excel
-            </button>
+            </a>
         </div>
     </div>
 
@@ -243,12 +243,6 @@
         </form>
     </div>
 
-    <!-- Bulk Actions Form (Hidden, for Excel Export) -->
-    <form id="bulkExportForm" method="POST" style="display: none;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="export_excel">
-    </form>
-
     <!-- Orders Table -->
     <div class="card order-table">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -285,133 +279,116 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for order in orders %}
+                            {% for item in orders %}
                             <tr>
                                 <td>
-                                    <input type="checkbox" name="selected_orders" value="{{ order.id }}" class="order-checkbox">
+                                    <input type="checkbox" name="selected_orders" value="{{ item.order.id }}" class="order-checkbox">
                                 </td>
                                 <td>
-                                    <div class="d-flex align-items-start flex-wrap">
-                                        {% for item in order.orderitem_set.all|slice:":2" %}
-                                        <div class="d-flex align-items-center me-3 mb-2" style="min-width: 180px;">
-                                            <div style="position: relative; flex-shrink: 0;">
-                                                {% if item.product.product_image %}
-                                                <img src="{{ item.product.product_image.url }}" alt="{{ item.product.name }}" 
-                                                     style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; border: 2px solid #e7e7ff;">
-                                                {% elif item.product.descriptionimage_set.first %}
-                                                <img src="{{ item.product.descriptionimage_set.first.image.url }}" alt="{{ item.product.name }}" 
-                                                     style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; border: 2px solid #e7e7ff;">
-                                                {% else %}
-                                                <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                                    <i class='bx bx-package' style="font-size: 24px; color: white;"></i>
-                                                </div>
-                                                {% endif %}
-                                                {% if item.quantity > 1 %}
-                                                <span style="position: absolute; top: -8px; right: -8px; background: #696cff; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">{{ item.quantity }}</span>
-                                                {% endif %}
-                                            </div>
-                                            <div class="ms-2" style="max-width: 120px;">
-                                                <div style="font-size: 13px; font-weight: 500; color: #566a7f; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ item.product.name }}">
-                                                    {{ item.product.name }}
-                                                </div>
-                                                <small class="text-muted" style="font-size: 11px;">₹{{ item.price }}</small>
-                                            </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {% if item.product_image %}
+                                        <img src="{{ item.product_image }}" alt="{{ item.product_name }}" 
+                                             style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px;">
+                                        {% else %}
+                                        <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                            <i class='bx bx-package' style="font-size: 22px; color: white;"></i>
                                         </div>
-                                        {% endfor %}
-                                        {% if order.orderitem_set.count > 2 %}
-                                        <div style="width: 45px; height: 45px; background: #696cff; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; box-shadow: 0 2px 4px rgba(105,108,255,0.4);">+{{ order.orderitem_set.count|add:"-2" }}</div>
                                         {% endif %}
+                                        <div>
+                                            <div style="font-size: 13px; font-weight: 500; color: #566a7f;">{{ item.product_name }}</div>
+                                            <small class="text-muted">₹{{ item.product_price }}</small>
+                                        </div>
                                     </div>
                                 </td>
                                 <td>
-                                    <a href="{% url 'admin_order_details' order.id %}" class="text-primary fw-bold">
-                                        {{ order.order_number }}
+                                    <a href="{% url 'admin_order_details' item.order.id %}" class="text-primary fw-bold">
+                                        {{ item.order.order_number }}
                                     </a>
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center">
-                                        {% if order.user.userprofile.profile_image %}
-                                        <img src="{{ order.user.userprofile.profile_image.url }}" alt="{{ order.user.username }}" class="customer-avatar">
+                                        {% if item.order.user.userprofile.profile_image %}
+                                        <img src="{{ item.order.user.userprofile.profile_image.url }}" alt="{{ item.order.user.username }}" class="customer-avatar">
                                         {% else %}
                                         <span class="avatar-initial rounded-circle bg-label-primary customer-avatar d-flex align-items-center justify-content-center">
-                                            {{ order.user.username|slice:":1"|upper }}
+                                            {{ item.order.user.username|slice:":1"|upper }}
                                         </span>
                                         {% endif %}
                                         <div>
-                                            <strong>{{ order.user.username }}</strong>
+                                            <strong>{{ item.order.user.username }}</strong>
                                             <br>
-                                            <small class="text-muted">{{ order.user.first_name }} {{ order.user.last_name }}</small>
+                                            <small class="text-muted">{{ item.order.user.first_name }} {{ item.order.user.last_name }}</small>
                                         </div>
                                     </div>
                                 </td>
                                 <td>
                                     <div>
-                                        <i class='bx bx-envelope'></i> {{ order.user.email }}
+                                        <i class='bx bx-envelope'></i> {{ item.order.user.email }}
                                         <br>
-                                        {% if order.user.userprofile.mobile_number %}
-                                        <i class='bx bx-phone'></i> {{ order.user.userprofile.country_code }} {{ order.user.userprofile.mobile_number }}
+                                        {% if item.order.user.userprofile.mobile_number %}
+                                        <i class='bx bx-phone'></i> {{ item.order.user.userprofile.country_code }} {{ item.order.user.userprofile.mobile_number }}
                                         {% endif %}
                                     </div>
                                 </td>
                                 <td>
-                                    <strong>₹{{ order.total_amount|floatformat:2 }}</strong>
+                                    <strong>₹{{ item.subtotal|floatformat:2 }}</strong>
                                 </td>
                                 <td>
-                                    {% if order.order_status == 'PENDING' %}
+                                    {% if item.order.order_status == 'PENDING' %}
                                     <span class="badge bg-warning">
-                                        <i class='bx bx-time-five'></i> {{ order.get_order_status_display }}
+                                        <i class='bx bx-time-five'></i> {{ item.order.get_order_status_display }}
                                     </span>
-                                    {% elif order.order_status == 'PROCESSING' %}
+                                    {% elif item.order.order_status == 'PROCESSING' %}
                                     <span class="badge bg-info">
-                                        <i class='bx bx-package'></i> {{ order.get_order_status_display }}
+                                        <i class='bx bx-package'></i> {{ item.order.get_order_status_display }}
                                     </span>
-                                    {% elif order.order_status == 'SHIPPED' %}
+                                    {% elif item.order.order_status == 'SHIPPED' %}
                                     <span class="badge bg-secondary">
-                                        <i class='bx bx-car'></i> {{ order.get_order_status_display }}
+                                        <i class='bx bx-car'></i> {{ item.order.get_order_status_display }}
                                     </span>
-                                    {% elif order.order_status == 'DELIVERED' %}
+                                    {% elif item.order.order_status == 'DELIVERED' %}
                                     <span class="badge bg-success">
-                                        <i class='bx bx-check-circle'></i> {{ order.get_order_status_display }}
+                                        <i class='bx bx-check-circle'></i> {{ item.order.get_order_status_display }}
                                     </span>
-                                    {% elif order.order_status == 'CANCELLED' %}
+                                    {% elif item.order.order_status == 'CANCELLED' %}
                                     <span class="badge bg-danger">
-                                        <i class='bx bx-x-circle'></i> {{ order.get_order_status_display }}
+                                        <i class='bx bx-x-circle'></i> {{ item.order.get_order_status_display }}
                                     </span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if order.payment_status == 'PAID' %}
+                                    {% if item.order.payment_status == 'PAID' %}
                                     <span class="badge bg-success">
-                                        <i class='bx bx-check-double'></i> {{ order.get_payment_status_display }}
+                                        <i class='bx bx-check-double'></i> {{ item.order.get_payment_status_display }}
                                     </span>
-                                    {% elif order.payment_status == 'PENDING' %}
+                                    {% elif item.order.payment_status == 'PENDING' %}
                                     <span class="badge bg-warning">
-                                        <i class='bx bx-time'></i> {{ order.get_payment_status_display }}
+                                        <i class='bx bx-time'></i> {{ item.order.get_payment_status_display }}
                                     </span>
-                                    {% elif order.payment_status == 'FAILED' %}
+                                    {% elif item.order.payment_status == 'FAILED' %}
                                     <span class="badge bg-danger">
-                                        <i class='bx bx-error'></i> {{ order.get_payment_status_display }}
+                                        <i class='bx bx-error'></i> {{ item.order.get_payment_status_display }}
                                     </span>
-                                    {% elif order.payment_status == 'REFUNDED' %}
+                                    {% elif item.order.payment_status == 'REFUNDED' %}
                                     <span class="badge bg-secondary">
-                                        <i class='bx bx-revision'></i> {{ order.get_payment_status_display }}
+                                        <i class='bx bx-revision'></i> {{ item.order.get_payment_status_display }}
                                     </span>
                                     {% endif %}
                                     <br>
-                                    <small class="text-muted"><i class='bx bx-credit-card'></i> {{ order.get_payment_method_display }}</small>
+                                    <small class="text-muted"><i class='bx bx-credit-card'></i> {{ item.order.get_payment_method_display }}</small>
                                 </td>
                                 <td>
                                     <div>
-                                        {{ order.created_at|date:"d M, Y" }}
+                                        {{ item.order.created_at|date:"d M, Y" }}
                                         <br>
-                                        <small class="text-muted">{{ order.created_at|date:"h:i A" }}</small>
+                                        <small class="text-muted">{{ item.order.created_at|date:"h:i A" }}</small>
                                     </div>
                                 </td>
                                 <td>
-                                    {% if order.tracking_number %}
-                                    <span class="badge bg-info">{{ order.tracking_number }}</span>
-                                    {% if order.courier_name %}
-                                    <br><small class="text-muted">{{ order.courier_name }}</small>
+                                    {% if item.order.tracking_number %}
+                                    <span class="badge bg-info">{{ item.order.tracking_number }}</span>
+                                    {% if item.order.courier_name %}
+                                    <br><small class="text-muted">{{ item.order.courier_name }}</small>
                                     {% endif %}
                                     {% else %}
                                     <span class="text-muted">-</span>
@@ -424,7 +401,7 @@
                                         </button>
                                         <ul class="dropdown-menu action-dropdown">
                                             <li>
-                                                <a class="dropdown-item" href="{% url 'admin_order_details' order.id %}">
+                                                <a class="dropdown-item" href="{% url 'admin_order_details' item.order.id %}">
                                                     <i class='bx bx-show'></i> View Details
                                                 </a>
                                             </li>

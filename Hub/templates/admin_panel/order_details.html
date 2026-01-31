@@ -34,6 +34,11 @@
                             <div class="d-flex gap-2">
                                 <span class="badge bg-{{ order.get_payment_status_color }} fs-6">{{ order.get_payment_status_display }}</span>
                                 <a href="#" data-bs-toggle="modal" data-bs-target="#updatePaymentModal" class="btn btn-sm btn-outline-primary">Change</a>
+                                {% if order.payment_status == 'PAID' and order.razorpay_payment_id %}
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#refundModal">
+                                    <i class='bx bx-money'></i> Refund
+                                </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -253,6 +258,55 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Razorpay Refund Modal -->
+<div class="modal fade" id="refundModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class='bx bx-money'></i> Process Refund</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{% url 'razorpay_refund' order.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <strong>Warning:</strong> This will initiate a refund to the customer's payment method.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Razorpay Payment ID</label>
+                        <input type="text" class="form-control" value="{{ order.razorpay_payment_id }}" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Order Amount</label>
+                        <input type="text" class="form-control" value="₹{{ order.total_amount }}" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Refund Amount (₹)</label>
+                        <input type="number" class="form-control" name="refund_amount" 
+                               step="0.01" min="1" max="{{ order.total_amount }}" 
+                               value="{{ order.total_amount }}" required>
+                        <small class="text-muted">Leave as is for full refund, or enter partial amount</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Refund Reason</label>
+                        <textarea class="form-control" name="refund_reason" rows="3" required>Customer requested refund</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class='bx bx-money'></i> Process Refund
+                    </button>
                 </div>
             </form>
         </div>

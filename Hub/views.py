@@ -2,7 +2,7 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib import messages 
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q, Avg, Sum
@@ -72,12 +72,8 @@ def admin_dashboard(request):
     # Recent Orders
     recent_orders = Order.objects.all().select_related('user').order_by('-created_at')[:10]
 
-    # Recent Order Items for dashboard table
-    recent_order_items = (
-        OrderItem.objects
-        .select_related('order', 'product')
-        .order_by('-created_at')[:7]
-    )
+    # Recent Order Items for dashboard table (show first 7 recent orders with their items)
+    recent_order_items = Order.objects.all().select_related('user').prefetch_related('items').order_by('-created_at')[:7]
     
     # Top Selling Products (by total quantity sold)
     top_products = (
@@ -832,8 +828,8 @@ def export_orders_to_excel(orders):
     ws.title = "Orders"
     
     # Headers
-    headers = ['Order Number', 'Customer Name', 'Email', 'Phone', 'Total Amount', 'Order Status', 
-               'Payment Status', 'Payment Method', 'Order Date', 'Tracking Number']
+    headers = ['Order Number', 'Product', 'Quantity', 'Price', 'Customer Name', 'Email', 'Phone', 
+               'Order Status', 'Payment Status', 'Order Date', 'Tracking Number']
     ws.append(headers)
     
     # Style headers
@@ -846,18 +842,19 @@ def export_orders_to_excel(orders):
         cell.alignment = Alignment(horizontal="center")
     
     # Data rows
-    for order in orders:
+    for item in orders:
         ws.append([
-            order.order_number,
-            order.user.get_full_name() or order.user.username,
-            order.user.email,
-            order.user.userprofile.mobile_number if hasattr(order.user, 'userprofile') else '',
-            float(order.total_amount),
-            order.get_order_status_display(),
-            order.get_payment_status_display(),
-            order.get_payment_method_display(),
-            order.created_at.strftime('%Y-%m-%d %H:%M'),
-            order.tracking_number or ''
+            item.order.order_number,
+            item.product_name,
+            item.quantity,
+            float(item.subtotal),
+            item.order.user.get_full_name() or item.order.user.username,
+            item.order.user.email,
+            item.order.user.userprofile.mobile_number if hasattr(item.order.user, 'userprofile') else '',
+            item.order.get_order_status_display(),
+            item.order.get_payment_status_display(),
+            item.order.created_at.strftime('%d-%m-%Y'),
+            item.order.tracking_number or ''
         ])
     
     # Auto-adjust column widths
@@ -875,7 +872,7 @@ def export_orders_to_excel(orders):
     
     # Create response
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="orders_{datetime.now().strftime("%Y%m%d")}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="Order {datetime.now().strftime("%m/%Y")}.xlsx"'
     wb.save(response)
     
     return response
@@ -922,49 +919,46 @@ def admin_orders(request):
                 orders.delete()
                 messages.success(request, f"{len(order_ids)} orders deleted")
                 
-            elif action == 'export_excel':
-                # Export to Excel
-                return export_orders_to_excel(orders)
-                
             return redirect('admin_orders')
     
-    # Get all orders
-    all_orders = Order.objects.select_related('user').prefetch_related('items').order_by('-created_at')
+    # Get all order items (individual products with their order details)
+    all_orders = OrderItem.objects.select_related('order', 'order__user', 'product').order_by('-order__created_at')
     
     # === FILTERS ===
     # Status filter
     status_filter = request.GET.get('status', '')
     if status_filter:
-        all_orders = all_orders.filter(order_status=status_filter)
+        all_orders = all_orders.filter(order__order_status=status_filter)
     
     # Payment status filter
     payment_filter = request.GET.get('payment', '')
     if payment_filter:
-        all_orders = all_orders.filter(payment_status=payment_filter)
+        all_orders = all_orders.filter(order__payment_status=payment_filter)
     
     # Date range filter
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
     if date_from:
-        all_orders = all_orders.filter(created_at__gte=date_from)
+        all_orders = all_orders.filter(order__created_at__gte=date_from)
     if date_to:
-        all_orders = all_orders.filter(created_at__lte=date_to)
+        all_orders = all_orders.filter(order__created_at__lte=date_to)
     
-    # Search filter (Order ID, Customer name, Phone, Email)
+    # Search filter (Order ID, Customer name, Phone, Email, Product name)
     search_query = request.GET.get('search', '')
     if search_query:
         all_orders = all_orders.filter(
-            Q(order_number__icontains=search_query) |
-            Q(user__username__icontains=search_query) |
-            Q(user__email__icontains=search_query) |
-            Q(user__first_name__icontains=search_query) |
-            Q(user__last_name__icontains=search_query) |
-            Q(user__userprofile__mobile_number__icontains=search_query) |
-            Q(tracking_number__icontains=search_query)
+            Q(order__order_number__icontains=search_query) |
+            Q(order__user__username__icontains=search_query) |
+            Q(order__user__email__icontains=search_query) |
+            Q(order__user__first_name__icontains=search_query) |
+            Q(order__user__last_name__icontains=search_query) |
+            Q(order__user__userprofile__mobile_number__icontains=search_query) |
+            Q(order__tracking_number__icontains=search_query) |
+            Q(product_name__icontains=search_query)
         )
     
     # Sorting
-    sort_by = request.GET.get('sort', '-created_at')
+    sort_by = request.GET.get('sort', '-order__created_at')
     all_orders = all_orders.order_by(sort_by)
     
     # === STATISTICS ===
@@ -993,24 +987,30 @@ def admin_orders(request):
     # === EXPORT TO CSV ===
     if request.GET.get('export') == 'csv':
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="orders_{datetime.now().strftime("%Y%m%d")}.csv"'
+        response['Content-Disposition'] = f'attachment; filename="Order {datetime.now().strftime("%m/%Y")}.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['Order Number', 'Customer', 'Email', 'Phone', 'Total Amount', 'Order Status', 'Payment Status', 'Date'])
+        writer.writerow(['Order Number', 'Product', 'Quantity', 'Price', 'Customer', 'Email', 'Phone', 'Order Status', 'Payment Status', 'Date'])
         
-        for order in all_orders:
+        for item in all_orders:
             writer.writerow([
-                order.order_number,
-                order.user.get_full_name() or order.user.username,
-                order.user.email,
-                order.user.userprofile.mobile_number if hasattr(order.user, 'userprofile') else '',
-                order.total_amount,
-                order.get_order_status_display(),
-                order.get_payment_status_display(),
-                order.created_at.strftime('%Y-%m-%d %H:%M')
+                item.order.order_number,
+                item.product_name,
+                item.quantity,
+                item.subtotal,
+                item.order.user.get_full_name() or item.order.user.username,
+                item.order.user.email,
+                item.order.user.userprofile.mobile_number if hasattr(item.order.user, 'userprofile') else '',
+                item.order.get_order_status_display(),
+                item.order.get_payment_status_display(),
+                item.order.created_at.strftime('%d-%m-%Y')
             ])
         
         return response
+    
+    # === EXPORT TO EXCEL ===
+    if request.GET.get('export') == 'excel':
+        return export_orders_to_excel(all_orders)
     
     # === PAGINATION ===
     page_size = request.GET.get('page_size', '20')
@@ -2905,22 +2905,51 @@ def order_confirmation(request, order_id):
 
 @login_required(login_url='login')
 def razorpay_payment(request, order_id):
-    """Razorpay Payment Page"""
+    """Razorpay Payment Page with Order Creation"""
+    import razorpay
+    
     order = get_object_or_404(Order, id=order_id, user=request.user)
     
     # Get Razorpay keys from settings
     razorpay_key = getattr(settings, 'RAZORPAY_KEY_ID', '')
+    razorpay_secret = getattr(settings, 'RAZORPAY_KEY_SECRET', '')
     
-    if not razorpay_key:
+    if not razorpay_key or not razorpay_secret:
         messages.error(request, 'Payment gateway not configured')
         return redirect('order_confirmation', order_id=order.id)
     
-    context = {
-        'order': order,
-        'razorpay_key': razorpay_key,
-        'order_amount': int(order.total_amount * 100),  # Convert to paise
-    }
-    return render(request, 'razorpay_payment.html', context)
+    try:
+        # Create Razorpay client
+        client = razorpay.Client(auth=(razorpay_key, razorpay_secret))
+        
+        # Create Razorpay order if not already created
+        if not order.razorpay_order_id:
+            razorpay_order = client.order.create({
+                'amount': int(order.total_amount * 100),  # Amount in paise
+                'currency': 'INR',
+                'receipt': order.order_number,
+                'notes': {
+                    'order_id': str(order.id),
+                    'customer': order.user.username,
+                    'email': order.user.email
+                }
+            })
+            
+            # Save Razorpay order ID
+            order.razorpay_order_id = razorpay_order['id']
+            order.save()
+        
+        context = {
+            'order': order,
+            'razorpay_key': razorpay_key,
+            'razorpay_order_id': order.razorpay_order_id,
+            'order_amount': int(order.total_amount * 100),  # Convert to paise
+        }
+        return render(request, 'razorpay_payment.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error creating payment: {str(e)}')
+        return redirect('order_confirmation', order_id=order.id)
 
 
 @login_required(login_url='login')
@@ -2972,6 +3001,155 @@ def razorpay_payment_success(request):
     except Exception as e:
         messages.error(request, f'Error processing payment: {str(e)}')
         return redirect('checkout')
+
+
+@login_required(login_url='login')
+def razorpay_payment_cancel(request, order_id):
+    """Handle Razorpay Payment Cancellation"""
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    
+    # Update order status
+    order.payment_status = 'FAILED'
+    order.order_status = 'CANCELLED'
+    order.save()
+    
+    messages.warning(request, 'Payment was cancelled. You can try again from your orders.')
+    return redirect('checkout')
+
+
+@login_required(login_url='login')
+@require_POST
+def razorpay_webhook(request):
+    """Handle Razorpay Webhook Events"""
+    import razorpay
+    import json
+    from django.views.decorators.csrf import csrf_exempt
+    
+    webhook_secret = getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '')
+    webhook_signature = request.headers.get('X-Razorpay-Signature', '')
+    webhook_body = request.body
+    
+    if not webhook_secret:
+        return JsonResponse({'status': 'webhook not configured'}, status=400)
+    
+    # Verify webhook signature
+    try:
+        # Verify signature
+        import hmac
+        import hashlib
+        
+        expected_signature = hmac.new(
+            webhook_secret.encode('utf-8'),
+            webhook_body,
+            hashlib.sha256
+        ).hexdigest()
+        
+        if expected_signature != webhook_signature:
+            return JsonResponse({'status': 'invalid signature'}, status=400)
+            
+    except Exception as e:
+        return JsonResponse({'status': 'verification failed'}, status=400)
+    
+    # Process webhook data
+    try:
+        data = json.loads(webhook_body)
+        event = data.get('event')
+        
+        if event == 'payment.captured':
+            # Payment successful
+            payment = data['payload']['payment']['entity']
+            order_id = payment['notes'].get('order_id')
+            
+            if order_id:
+                order = Order.objects.get(id=order_id)
+                order.payment_status = 'PAID'
+                order.order_status = 'PROCESSING'
+                order.razorpay_payment_id = payment['id']
+                order.save()
+                
+                # Clear user's cart
+                Cart.objects.filter(user=order.user).delete()
+                
+        elif event == 'payment.failed':
+            # Payment failed
+            payment = data['payload']['payment']['entity']
+            order_id = payment['notes'].get('order_id')
+            
+            if order_id:
+                order = Order.objects.get(id=order_id)
+                order.payment_status = 'FAILED'
+                order.save()
+        
+        return JsonResponse({'status': 'ok'})
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required(login_url='login')
+@user_passes_test(lambda u: u.is_staff)
+def razorpay_refund(request, order_id):
+    """Process Razorpay Refund for an Order"""
+    import razorpay
+    
+    order = get_object_or_404(Order, id=order_id)
+    
+    # Check if order can be refunded
+    if order.payment_status != 'PAID':
+        messages.error(request, 'Only paid orders can be refunded')
+        return redirect('admin_order_details', order_id=order.id)
+    
+    if not order.razorpay_payment_id:
+        messages.error(request, 'No payment ID found for this order')
+        return redirect('admin_order_details', order_id=order.id)
+    
+    # Get Razorpay credentials
+    razorpay_key = getattr(settings, 'RAZORPAY_KEY_ID', '')
+    razorpay_secret = getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+    
+    if not razorpay_key or not razorpay_secret:
+        messages.error(request, 'Payment gateway not configured')
+        return redirect('admin_order_details', order_id=order.id)
+    
+    try:
+        # Create Razorpay client
+        client = razorpay.Client(auth=(razorpay_key, razorpay_secret))
+        
+        # Get refund amount (can be partial or full)
+        refund_amount = request.POST.get('refund_amount')
+        if refund_amount:
+            amount_in_paise = int(float(refund_amount) * 100)
+        else:
+            # Full refund
+            amount_in_paise = int(order.total_amount * 100)
+        
+        # Create refund
+        refund = client.payment.refund(
+            order.razorpay_payment_id,
+            {
+                'amount': amount_in_paise,
+                'speed': 'normal',
+                'notes': {
+                    'reason': request.POST.get('refund_reason', 'Customer requested refund'),
+                    'order_number': order.order_number,
+                    'refunded_by': request.user.username
+                },
+                'receipt': f'REFUND_{order.order_number}'
+            }
+        )
+        
+        # Update order status
+        order.payment_status = 'REFUNDED'
+        order.order_status = 'CANCELLED'
+        order.admin_notes = f"Refund ID: {refund['id']}\nRefund Amount: ₹{refund_amount or order.total_amount}\n{order.admin_notes}"
+        order.save()
+        
+        messages.success(request, f'Refund initiated successfully! Refund ID: {refund["id"]}')
+        
+    except Exception as e:
+        messages.error(request, f'Refund failed: {str(e)}')
+    
+    return redirect('admin_order_details', order_id=order.id)
 
 
 @login_required(login_url='login')

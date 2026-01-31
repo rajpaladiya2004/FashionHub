@@ -144,6 +144,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-# Razorpay Settings (Add your keys here)
-RAZORPAY_KEY_ID = 'your_razorpay_key_id'
+
+# Razorpay Payment Gateway Settings
+RAZORPAY_KEY_ID = 'your_razorpay_key_id'  # Get from https://dashboard.razorpay.com/app/keys
 RAZORPAY_KEY_SECRET = 'your_razorpay_key_secret'
+RAZORPAY_WEBHOOK_SECRET = 'your_webhook_secret'  # Get from Razorpay Dashboard > Webhooks

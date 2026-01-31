@@ -460,59 +460,56 @@
                     <table class="table align-middle">
                         <thead>
                             <tr class="text-uppercase text-muted" style="font-size: 12px; letter-spacing: .04em;">
-                                <th>Product</th>
-                                <th>Category</th>
+                                <th>Products</th>
+                                <th>Order #</th>
                                 <th>Payment</th>
                                 <th>Order Status</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for item in recent_order_items %}
+                            {% for order in recent_order_items %}
                             <tr>
                                 <td>
-                                    <div class="d-flex align-items-center">
-                                        {% if item.product and item.product.image %}
-                                            <img src="{{ item.product.image.url }}" alt="{{ item.product_name }}" class="me-2" style="width: 36px; height: 36px; object-fit: cover; border-radius: 6px;">
-                                        {% else %}
-                                            <div class="me-2" style="width: 36px; height: 36px; border-radius: 6px; background: #eef2ff; display: grid; place-items: center;">
-                                                <i class="bx bx-package"></i>
-                                            </div>
-                                        {% endif %}
-                                        <div>
-                                            <div class="fw-semibold">{{ item.product_name|truncatewords:3 }}</div>
-                                            <small class="text-muted">{{ item.product.brand|default:"" }}</small>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <span class="badge bg-label-primary me-2" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;">
-                                            <i class="bx bx-category"></i>
-                                        </span>
-                                        <span>
-                                            {% if item.product %}
-                                                {{ item.product.get_category_display|default:"Category" }}
+                                    <div class="d-flex flex-column gap-1">
+                                        {% for item in order.items.all|slice:":2" %}
+                                        <div class="d-flex align-items-center">
+                                            {% if item.product_image %}
+                                                <img src="{{ item.product_image }}" alt="{{ item.product_name }}" class="me-2" style="width: 36px; height: 36px; object-fit: cover; border-radius: 6px;">
                                             {% else %}
-                                                Category
+                                                <div class="me-2" style="width: 36px; height: 36px; border-radius: 6px; background: #eef2ff; display: grid; place-items: center;">
+                                                    <i class="bx bx-package"></i>
+                                                </div>
                                             {% endif %}
-                                        </span>
+                                            <div>
+                                                <div class="fw-semibold" style="font-size: 13px;">{{ item.product_name|truncatewords:3 }}</div>
+                                                <small class="text-muted">₹{{ item.product_price }}</small>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                        {% if order.items.count > 2 %}
+                                        <small class="text-muted ms-5">+{{ order.items.count|add:"-2" }} more</small>
+                                        {% endif %}
                                     </div>
                                 </td>
                                 <td>
-                                    <div class="fw-semibold">₹{{ item.order.total_amount|floatformat:0 }}</div>
+                                    <div class="fw-semibold">#{{ order.order_number }}</div>
+                                    <small class="text-muted">{{ order.user.get_full_name|default:order.user.username }}</small>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">₹{{ order.total_amount|floatformat:0 }}</div>
                                     <small class="text-muted">
-                                        {% if item.order.payment_status == 'PAID' %}Fully Paid{% else %}Unpaid{% endif %}
+                                        {% if order.payment_status == 'PAID' %}Fully Paid{% else %}Unpaid{% endif %}
                                     </small>
                                 </td>
                                 <td>
                                     <span class="badge 
-                                        {% if item.order.order_status == 'DELIVERED' %}bg-label-success
-                                        {% elif item.order.order_status == 'SHIPPED' %}bg-label-info
-                                        {% elif item.order.order_status == 'PROCESSING' %}bg-label-primary
-                                        {% elif item.order.order_status == 'CANCELLED' %}bg-label-danger
+                                        {% if order.order_status == 'DELIVERED' %}bg-label-success
+                                        {% elif order.order_status == 'SHIPPED' %}bg-label-info
+                                        {% elif order.order_status == 'PROCESSING' %}bg-label-primary
+                                        {% elif order.order_status == 'CANCELLED' %}bg-label-danger
                                         {% else %}bg-label-warning{% endif %}">
-                                        {{ item.order.order_status|title }}
+                                        {{ order.order_status|title }}
                                     </span>
                                 </td>
                                 <td class="text-end">
@@ -521,7 +518,7 @@
                                             <i class="bx bx-dots-vertical-rounded"></i>
                                         </button>
                                         <div class="dropdown-menu dropdown-menu-end">
-                                            <a class="dropdown-item" href="{% url 'admin_order_details' item.order.id %}">View</a>
+                                            <a class="dropdown-item" href="{% url 'admin_order_details' order.id %}">View</a>
                                             <a class="dropdown-item" href="{% url 'admin_orders' %}">All Orders</a>
                                         </div>
                                     </div>
