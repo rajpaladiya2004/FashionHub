@@ -26,6 +26,15 @@ A modern e-commerce web application built with Django 5.2, featuring product man
 - FontAwesome Icons
 - JavaScript (Vanilla)
 
+## Documentation
+
+- [Installation & Setup](#installation)
+- [Contributing Guide](CONTRIBUTING.md)
+- [GitHub Actions Setup](GITHUB_ACTIONS_GUIDE.md)
+- [Render Deployment](RENDER_DEPLOYMENT_GUIDE.md)
+- [Razorpay Setup](RAZORPAY_SETUP_GUIDE.md)
+- [Category Management](CATEGORY_MANAGEMENT_GUIDE.md)
+
 ## Installation
 
 1. Clone the repository:
