@@ -19,7 +19,7 @@ jobs:
             const issueCreator = issue.user.login;
             
             const greeting = `👋 Hi @${issueCreator}!
-
+            
             Thank you for creating this issue! We appreciate you taking the time to report this.
             
             Our team will review your issue soon. In the meantime:

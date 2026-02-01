@@ -81,7 +81,7 @@ jobs:
             
             if (prs.length === 1) {
               const welcomeMessage = `🎉 Welcome @${creator}!
-
+              
               Thank you for your first contribution to FashionHub! 
               
               We're excited to have you as part of our community. Your PR will be reviewed soon.
