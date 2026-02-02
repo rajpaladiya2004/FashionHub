@@ -3189,7 +3189,7 @@ input {
 }
 .product__thumb .product__offer {
   position: absolute;
-  top: 0px;
+  bottom: 10px;
   left: 0px;
 }
 .product__thumb .product__offer span {
@@ -3566,7 +3566,7 @@ input {
 }
 .features-thum .product__offer {
   position: absolute;
-  top: 0;
+  bottom: 10px;
   left: 0;
 }
 .features-thum .product__offer span {

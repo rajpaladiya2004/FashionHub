@@ -1,7 +1,33 @@
 # admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import CategoryIcon, Slider, Feature, Banner, Product, ProductImage, DealCountdown, Cart, Wishlist, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings
+from .models import (
+    CategoryIcon,
+    Slider,
+    Feature,
+    Banner,
+    Product,
+    ProductImage,
+    DealCountdown,
+    Cart,
+    Wishlist,
+    ProductReview,
+    ReviewImage,
+    ReviewVote,
+    ProductQuestion,
+    Order,
+    OrderItem,
+    OrderStatusHistory,
+    AdminEmailSettings,
+    ProductStockNotification,
+    BrandPartner,
+    LoyaltyPoints,
+    PointsTransaction,
+    ReturnRequest,
+    WishlistPriceAlert,
+    Notification,
+    EmailLog,
+)
 
 admin.site.register(Slider)
 
@@ -197,6 +223,14 @@ class WishlistAdmin(admin.ModelAdmin):
     list_filter = ('user', 'added_at')
     search_fields = ('user__username', 'product__name')
     readonly_fields = ('added_at',)
+
+
+@admin.register(ProductStockNotification)
+class ProductStockNotificationAdmin(admin.ModelAdmin):
+    list_display = ('product', 'email', 'user', 'is_sent', 'created_at', 'notified_at')
+    list_filter = ('is_sent', 'created_at', 'notified_at', 'product')
+    search_fields = ('email', 'product__name')
+    readonly_fields = ('created_at', 'notified_at')
 
 
 class ReviewImageInline(admin.TabularInline):
@@ -396,4 +430,119 @@ class AdminEmailSettingsAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         # Only allow one admin email setting
-        return AdminEmailSettings.objects.count() == 0
+        return not AdminEmailSettings.objects.exists()
+
+
+@admin.register(BrandPartner)
+class BrandPartnerAdmin(admin.ModelAdmin):
+    list_display = ('name', 'logo_preview', 'link_url', 'order', 'is_active')
+    list_editable = ('order', 'is_active')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'link_url')
+    readonly_fields = ('logo_preview_large', 'created_at', 'updated_at')
+    
+    fieldsets = (
+        ('📋 BRAND INFO', {
+            'fields': ('name', 'link_url'),
+            'description': 'Brand name and optional website URL'
+        }),
+        ('🖼️ LOGO', {
+            'fields': ('logo', 'logo_preview_large'),
+            'description': 'Upload brand logo (recommended size: 200x80px)'
+        }),
+        ('⚙️ SETTINGS', {
+            'fields': ('order', 'is_active', 'created_at', 'updated_at'),
+            'description': 'Display order and status'
+        }),
+    )
+    
+    def logo_preview(self, obj):
+        if obj.logo:
+            return format_html(
+                '<img src="{}" style="max-width: 80px; height: 40px; object-fit: contain; border-radius: 4px;" />',
+                obj.logo.url
+            )
+        return '—'
+    logo_preview.short_description = 'Logo'
+    
+    def logo_preview_large(self, obj):
+        if obj.logo:
+            return format_html(
+                '<img src="{}" style="max-width: 200px; max-height: 100px; object-fit: contain; border: 1px solid #ddd; padding: 10px; border-radius: 5px; background: #f9f9f9;" />',
+                obj.logo.url
+            )
+        return 'No logo uploaded'
+    logo_preview_large.short_description = 'Logo Preview'
+
+
+# ============================================
+# NEW FEATURES - Admin Registration
+# ============================================
+
+@admin.register(LoyaltyPoints)
+class LoyaltyPointsAdmin(admin.ModelAdmin):
+    list_display = ('user', 'total_points', 'points_used', 'points_available', 'updated_at')
+    list_filter = ('created_at',)
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(PointsTransaction)
+class PointsTransactionAdmin(admin.ModelAdmin):
+    list_display = ('user', 'points', 'transaction_type', 'description', 'created_at')
+    list_filter = ('transaction_type', 'created_at')
+    search_fields = ('user__username', 'description')
+    readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+
+
+@admin.register(ReturnRequest)
+class ReturnRequestAdmin(admin.ModelAdmin):
+    list_display = ('return_number', 'user', 'order', 'reason', 'status', 'refund_amount', 'created_at')
+    list_filter = ('status', 'reason', 'created_at')
+    search_fields = ('return_number', 'user__username', 'order__order_number')
+    readonly_fields = ('return_number', 'created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Return Information', {
+            'fields': ('return_number', 'order', 'user', 'order_item')
+        }),
+        ('Reason & Details', {
+            'fields': ('reason', 'description', 'images')
+        }),
+        ('Status & Processing', {
+            'fields': ('status', 'admin_notes', 'pickup_date')
+        }),
+        ('Refund Information', {
+            'fields': ('refund_amount', 'refund_method', 'refund_date')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+
+@admin.register(WishlistPriceAlert)
+class WishlistPriceAlertAdmin(admin.ModelAdmin):
+    list_display = ('user', 'product', 'original_price', 'target_price', 'is_active', 'notified')
+    list_filter = ('is_active', 'notified', 'created_at')
+    search_fields = ('user__username', 'product__name')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('user', 'notification_type', 'title', 'is_read', 'created_at')
+    list_filter = ('notification_type', 'is_read', 'created_at')
+    search_fields = ('user__username', 'title', 'message')
+    readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+
+
+@admin.register(EmailLog)
+class EmailLogAdmin(admin.ModelAdmin):
+    list_display = ('email_to', 'email_type', 'subject', 'sent_successfully', 'sent_at')
+    list_filter = ('email_type', 'sent_successfully', 'sent_at')
+    search_fields = ('email_to', 'subject', 'user__username')
+    readonly_fields = ('sent_at',)
+    date_hierarchy = 'sent_at'

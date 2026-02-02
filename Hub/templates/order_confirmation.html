@@ -195,7 +195,7 @@
                     {% endif %}
                     
                     <div class="order-actions mt-5 text-center">
-                        <a href="{% url 'profile' %}" class="tp-btn-h1 me-2">View My Orders</a>
+                        <a href="{% url 'order_list' %}" class="tp-btn-h1 me-2">View My Orders</a>
                         <a href="{% url 'index' %}" class="tp-btn-h1">Continue Shopping</a>
                         <a href="{% url 'resell_order' order.id %}" class="tp-btn-h1 ms-2" style="background-color: #2196f3;">🔄 Resell This Order</a>
                     </div>

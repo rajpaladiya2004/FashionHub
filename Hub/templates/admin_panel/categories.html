@@ -45,8 +45,14 @@
                     <tr>
                         <td><strong>{{ category.order }}</strong></td>
                         <td>
-                            <div style="display: inline-block; background: {{ category.background_gradient }}; padding: 12px; border-radius: 8px;">
-                                <i class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                            <div style="display: inline-block; background: {{ category.background_gradient }}; padding: 12px; border-radius: 8px; min-width: 60px; min-height: 60px; display: flex; align-items: center; justify-content: center;">
+                                {% if category.icon_image %}
+                                    <img src="{{ category.icon_image.url }}" alt="{{ category.name }}" style="width: 36px; height: 36px; object-fit: contain;">
+                                {% elif category.icon_class %}
+                                    <i class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                                {% else %}
+                                    <span style="color: #999;">No Icon</span>
+                                {% endif %}
                             </div>
                         </td>
                         <td><strong>{{ category.name }}</strong></td>
@@ -101,8 +107,12 @@
             {% if category.is_active %}
             <div class="col-xl col-lg col-md-2 col-sm-3 col-4">
                 <div class="category__item text-center mb-20" style="display: block;">
-                    <div class="category__icon" style="background: {{ category.background_gradient }}; padding: 15px; border-radius: 10px; margin-bottom: 8px;">
-                        <i class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                    <div class="category__icon" style="background: {{ category.background_gradient }}; padding: 15px; border-radius: 10px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; min-height: 60px;">
+                        {% if category.icon_image %}
+                            <img src="{{ category.icon_image.url }}" alt="{{ category.name }}" style="width: 36px; height: 36px; object-fit: contain;">
+                        {% elif category.icon_class %}
+                            <i class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                        {% endif %}
                     </div>
                     <h6 style="color: #333; font-weight: 600; font-size: 12px;">{{ category.name }}</h6>
                 </div>

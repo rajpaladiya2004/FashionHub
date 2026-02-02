@@ -5,15 +5,20 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
-from django.db.models import Count, Q, Avg, Sum
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import never_cache
+from django.db.models import Count, Q, Avg, Sum, F, DecimalField, ExpressionWrapper
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.conf import settings
+from django.urls import reverse
+from django.core.mail import send_mail
 from decimal import Decimal
 from urllib.parse import urlencode
+import logging
 
-from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings
+from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, ProductStockNotification, BrandPartner
 
 # ===== ADMIN PANEL VIEWS =====
 
@@ -623,7 +628,7 @@ def admin_add_category(request):
         try:
             name = request.POST.get('name')
             category_key = request.POST.get('category_key')
-            icon_class = request.POST.get('icon_class')
+            icon_class = request.POST.get('icon_class', '')
             icon_color = request.POST.get('icon_color', '#0288d1')
             background_gradient = request.POST.get('background_gradient', 'linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%)')
             order = request.POST.get('order', 0)
@@ -638,6 +643,11 @@ def admin_add_category(request):
                 order=order,
                 is_active=is_active
             )
+            
+            # Handle icon image upload
+            if request.FILES.get('icon_image'):
+                category.icon_image = request.FILES['icon_image']
+                category.save()
             
             messages.success(request, f'Category "{category.name}" added successfully!')
             return redirect('admin_categories')
@@ -658,11 +668,16 @@ def admin_edit_category(request, category_id):
         try:
             category.name = request.POST.get('name')
             category.category_key = request.POST.get('category_key')
-            category.icon_class = request.POST.get('icon_class')
+            category.icon_class = request.POST.get('icon_class', '')
             category.icon_color = request.POST.get('icon_color', '#0288d1')
             category.background_gradient = request.POST.get('background_gradient', 'linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%)')
             category.order = request.POST.get('order', 0)
             category.is_active = request.POST.get('is_active') == 'on'
+            
+            # Handle icon image upload
+            if request.FILES.get('icon_image'):
+                category.icon_image = request.FILES['icon_image']
+            
             category.save()
             
             messages.success(request, f'Category "{category.name}" updated successfully!')
@@ -687,6 +702,80 @@ def admin_delete_category(request, category_id):
     
     messages.success(request, f'Category "{category_name}" deleted successfully!')
     return redirect('admin_categories')
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_brand_partners(request):
+    """Admin Brand Partners Management Page"""
+    brand_partners = BrandPartner.objects.all().order_by('order', 'name')
+    
+    context = {
+        'brand_partners': brand_partners,
+    }
+    return render(request, 'admin_panel/brand_partners.html', context)
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_add_brand_partner(request):
+    """Add New Brand Partner"""
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        logo = request.FILES.get('logo')
+        link_url = request.POST.get('link_url', '')
+        order = request.POST.get('order', 0)
+        is_active = request.POST.get('is_active') == 'on'
+        
+        if name and logo:
+            partner = BrandPartner.objects.create(
+                name=name,
+                logo=logo,
+                link_url=link_url,
+                order=order,
+                is_active=is_active
+            )
+            messages.success(request, f'Brand Partner "{name}" added successfully!')
+            return redirect('admin_brand_partners')
+        else:
+            messages.error(request, 'Please provide brand name and logo!')
+    
+    return render(request, 'admin_panel/add_brand_partner.html')
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_edit_brand_partner(request, partner_id):
+    """Edit Brand Partner"""
+    partner = get_object_or_404(BrandPartner, id=partner_id)
+    
+    if request.method == 'POST':
+        partner.name = request.POST.get('name')
+        link_url = request.POST.get('link_url', '')
+        partner.link_url = link_url
+        partner.order = request.POST.get('order', 0)
+        partner.is_active = request.POST.get('is_active') == 'on'
+        
+        # Update logo if new one uploaded
+        if request.FILES.get('logo'):
+            partner.logo = request.FILES.get('logo')
+        
+        partner.save()
+        messages.success(request, f'Brand Partner "{partner.name}" updated successfully!')
+        return redirect('admin_brand_partners')
+    
+    context = {
+        'partner': partner,
+    }
+    return render(request, 'admin_panel/edit_brand_partner.html', context)
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_delete_brand_partner(request, partner_id):
+    """Delete Brand Partner"""
+    partner = get_object_or_404(BrandPartner, id=partner_id)
+    partner_name = partner.name
+    partner.delete()
+    
+    messages.success(request, f'Brand Partner "{partner_name}" deleted successfully!')
+    return redirect('admin_brand_partners')
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
@@ -959,6 +1048,19 @@ def admin_orders(request):
     
     # Sorting
     sort_by = request.GET.get('sort', '-order__created_at')
+    # Fix sorting for fields that belong to Order model (since we're querying OrderItem)
+    if sort_by == 'total_amount':
+        sort_by = 'order__total_amount'
+    elif sort_by == '-total_amount':
+        sort_by = '-order__total_amount'
+    elif sort_by == 'order_status':
+        sort_by = 'order__order_status'
+    elif sort_by == '-order_status':
+        sort_by = '-order__order_status'
+    elif sort_by == 'payment_status':
+        sort_by = 'order__payment_status'
+    elif sort_by == '-payment_status':
+        sort_by = '-order__payment_status'
     all_orders = all_orders.order_by(sort_by)
     
     # === STATISTICS ===
@@ -969,11 +1071,12 @@ def admin_orders(request):
     delivered_orders = Order.objects.filter(order_status='DELIVERED').count()
     cancelled_orders = Order.objects.filter(order_status='CANCELLED').count()
     
-    # Revenue stats
+    # Revenue stats (use Order model, not OrderItem)
     from decimal import Decimal
-    total_revenue = Order.objects.filter(payment_status='PAID').aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-    today_revenue = Order.objects.filter(payment_status='PAID', created_at__date=datetime.now().date()).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-    this_month_revenue = Order.objects.filter(payment_status='PAID', created_at__month=datetime.now().month).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    paid_orders = Order.objects.filter(payment_status='PAID')
+    total_revenue = paid_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    today_revenue = paid_orders.filter(created_at__date=datetime.now().date()).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    this_month_revenue = paid_orders.filter(created_at__month=datetime.now().month).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
     
     # Profit calculation (assuming 30% profit margin)
     profit_margin = Decimal('0.30')
@@ -1184,6 +1287,262 @@ def admin_invoices(request):
     }
     
     return render(request, 'admin_panel/invoices.html', context)
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_invoice_inventory(request):
+    """Unified Invoice & Inventory management dashboard for admins"""
+
+    invoices_qs = (
+        Order.objects
+        .select_related('user')
+        .prefetch_related('items')
+        .order_by('-created_at')
+    )
+
+    status_filter = request.GET.get('status', 'all')
+    payment_filter = request.GET.get('payment', 'all')
+    search_query = request.GET.get('search', '').strip()
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    if status_filter and status_filter.lower() != 'all':
+        invoices_qs = invoices_qs.filter(order_status=status_filter)
+
+    if payment_filter and payment_filter.lower() != 'all':
+        invoices_qs = invoices_qs.filter(payment_status=payment_filter)
+
+    if search_query:
+        invoices_qs = invoices_qs.filter(
+            Q(order_number__icontains=search_query)
+            | Q(user__username__icontains=search_query)
+            | Q(user__email__icontains=search_query)
+            | Q(user__first_name__icontains=search_query)
+            | Q(user__last_name__icontains=search_query)
+        )
+
+    if date_from:
+        invoices_qs = invoices_qs.filter(created_at__date__gte=date_from)
+
+    if date_to:
+        invoices_qs = invoices_qs.filter(created_at__date__lte=date_to)
+
+    items_per_page = request.GET.get('per_page', 10)
+    try:
+        items_per_page = int(items_per_page)
+    except (TypeError, ValueError):
+        items_per_page = 10
+
+    paginator = Paginator(invoices_qs, items_per_page)
+    page_number = request.GET.get('page', 1)
+
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    paid_orders_qs = Order.objects.filter(payment_status='PAID')
+    outstanding_orders_qs = Order.objects.filter(payment_status__in=['PENDING', 'FAILED'])
+
+    total_revenue = paid_orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    outstanding_amount = outstanding_orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    average_order_value = paid_orders_qs.aggregate(avg=Avg('total_amount'))['avg'] or Decimal('0.00')
+    overdue_invoices = outstanding_orders_qs.filter(order_status__in=['PENDING', 'PROCESSING']).count()
+
+    low_stock_threshold = 10
+    critical_stock_threshold = 3
+
+    inventory_value_expr = ExpressionWrapper(
+        F('stock') * F('price'),
+        output_field=DecimalField(max_digits=12, decimal_places=2)
+    )
+
+    active_products_qs = Product.objects.filter(is_active=True)
+
+    total_skus = active_products_qs.count()
+    total_units = active_products_qs.aggregate(total=Sum('stock'))['total'] or 0
+    total_inventory_value = active_products_qs.annotate(value=inventory_value_expr).aggregate(total=Sum('value'))['total'] or Decimal('0.00')
+
+    low_stock_qs = (
+        active_products_qs
+        .filter(stock__gt=0, stock__lte=low_stock_threshold)
+        .annotate(value=inventory_value_expr)
+        .order_by('stock')
+    )
+    low_stock_products = list(low_stock_qs[:12])
+
+    out_of_stock_qs = (
+        Product.objects
+        .filter(stock__lte=0)
+        .annotate(value=inventory_value_expr)
+        .order_by('name')
+    )
+    out_of_stock_products = list(out_of_stock_qs[:12])
+
+    low_stock_count = low_stock_qs.count()
+    out_of_stock_count = out_of_stock_qs.count()
+
+    top_movers = list(
+        active_products_qs
+        .annotate(total_sold=Sum('orderitem__quantity'))
+        .filter(total_sold__gt=0)
+        .order_by('-total_sold')[:8]
+    )
+
+    recent_restock = []
+    if any(field.name == 'updated_at' for field in Product._meta.get_fields()):
+        recent_restock = list(
+            active_products_qs
+            .filter(updated_at__isnull=False)
+            .order_by('-updated_at')[:6]
+        )
+
+    # Inventory manager list (all products)
+    inventory_qs = Product.objects.all().order_by('name')
+    product_search_query = request.GET.get('product_search', '').strip()
+
+    if product_search_query:
+        inventory_qs = inventory_qs.filter(
+            Q(name__icontains=product_search_query)
+            | Q(sku__icontains=product_search_query)
+            | Q(brand__icontains=product_search_query)
+        )
+
+    product_items_per_page = request.GET.get('product_per_page', 15)
+    try:
+        product_items_per_page = int(product_items_per_page)
+    except (TypeError, ValueError):
+        product_items_per_page = 15
+
+    product_paginator = Paginator(inventory_qs, product_items_per_page)
+    product_page_number = request.GET.get('product_page', 1)
+
+    try:
+        product_page_obj = product_paginator.page(product_page_number)
+    except PageNotAnInteger:
+        product_page_obj = product_paginator.page(1)
+    except EmptyPage:
+        product_page_obj = product_paginator.page(product_paginator.num_pages)
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    querystring = query_params.urlencode()
+
+    product_query_params = request.GET.copy()
+    product_query_params.pop('product_page', None)
+    product_querystring = product_query_params.urlencode()
+
+    context = {
+        'page_obj': page_obj,
+        'invoices': page_obj.object_list,
+        'items_per_page': items_per_page,
+        'status_filter': status_filter,
+        'payment_filter': payment_filter,
+        'search_query': search_query,
+        'date_from': date_from,
+        'date_to': date_to,
+        'querystring': querystring,
+        'product_querystring': product_querystring,
+        'current_path': request.get_full_path(),
+
+        'invoice_total_count': invoices_qs.count(),
+        'paid_invoice_count': paid_orders_qs.count(),
+        'outstanding_invoice_count': outstanding_orders_qs.count(),
+        'total_revenue': total_revenue,
+        'outstanding_amount': outstanding_amount,
+        'average_order_value': average_order_value,
+        'overdue_invoices': overdue_invoices,
+
+        'low_stock_products': low_stock_products,
+        'out_of_stock_products': out_of_stock_products,
+        'low_stock_threshold': low_stock_threshold,
+        'critical_stock_threshold': critical_stock_threshold,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'total_skus': total_skus,
+        'total_units': total_units,
+        'total_inventory_value': total_inventory_value,
+        'top_movers': top_movers,
+        'recent_restock': recent_restock,
+        'status_choices': Order.ORDER_STATUS_CHOICES,
+        'payment_status_choices': Order.PAYMENT_STATUS_CHOICES,
+        'product_page_obj': product_page_obj,
+        'inventory_products': product_page_obj.object_list,
+        'product_items_per_page': product_items_per_page,
+        'product_search_query': product_search_query,
+    }
+
+    return render(request, 'admin_panel/invoice_inventory.html', context)
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+@require_POST
+def admin_update_inventory(request):
+    """Adjust product stock from the Inventory dashboard."""
+    product_id = request.POST.get('product_id')
+    action = request.POST.get('action', 'save_stock')
+    redirect_url = request.POST.get('next') or reverse('admin_invoice_inventory')
+
+    try:
+        product = Product.objects.get(id=product_id)
+    except Product.DoesNotExist:
+        messages.error(request, 'Product not found')
+        return redirect(redirect_url)
+
+    try:
+        previous_stock = product.stock
+        if action == 'mark_out':
+            product.stock = 0
+            # Keep the product visible with an out-of-stock tag
+            product.is_active = True
+            product.save(update_fields=['stock', 'is_active'])
+            messages.success(request, f'Marked {product.name} as out of stock (visible in shop).')
+        else:
+            raw_stock = request.POST.get('stock', '0')
+            new_stock = max(0, int(raw_stock))
+            product.stock = new_stock
+
+            # Reactivate when restocked; keep visible even at 0
+            product.is_active = True if new_stock >= 0 else product.is_active
+            product.save(update_fields=['stock', 'is_active'])
+            messages.success(request, f'Updated stock for {product.name} to {new_stock}.')
+
+        # Notify subscribers when restocked from zero
+        if previous_stock <= 0 and product.stock > 0:
+            notifications = ProductStockNotification.objects.filter(product=product, is_sent=False)
+            sent_count = 0
+            failed_count = 0
+            last_error = ''
+            for note in notifications:
+                try:
+                    send_mail(
+                        subject=f"{product.name} is back in stock",
+                        message=f"Good news! {product.name} is available again. Visit the product page to purchase.",
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                        recipient_list=[note.email],
+                        fail_silently=False,
+                    )
+                    note.mark_sent()
+                    sent_count += 1
+                except Exception as exc:
+                    failed_count += 1
+                    last_error = str(exc)
+            if notifications.exists():
+                messages.info(request, f"Restock notifications attempted: sent {sent_count}, failed {failed_count}.")
+                if failed_count and last_error:
+                    messages.warning(request, f"Email error: {last_error}")
+            else:
+                messages.info(request, "No pending restock notifications for this product.")
+    except ValueError:
+        messages.error(request, 'Invalid stock value')
+    except Exception as exc:
+        messages.error(request, f'Could not update stock: {exc}')
+
+    return redirect(redirect_url)
 
 
 @login_required
@@ -1504,6 +1863,7 @@ def index(request):
     top_featured = Product.objects.filter(is_active=True, category='TOP_FEATURED')
     recommended = Product.objects.filter(is_active=True, category='RECOMMENDED')
     countdown = DealCountdown.objects.filter(is_active=True).first()
+    brand_partners = BrandPartner.objects.filter(is_active=True).order_by('order')
 
     # Get wishlist product IDs for logged-in user
     wishlist_product_ids = []
@@ -1527,6 +1887,7 @@ def index(request):
             'countdown': countdown,
             'wishlist_product_ids': wishlist_product_ids,
             'cart_product_ids': cart_product_ids,
+            'brand_partners': brand_partners,
         }
     )
 
@@ -1640,6 +2001,15 @@ def checkout(request):
         payment_method = request.POST.get('payment_method', 'COD')
         customer_notes = request.POST.get('customer_notes', '')
         is_resell = request.POST.get('is_resell') == 'on'
+        # Debug: Show selected payment method
+        print(f"[DEBUG] Selected payment method: {payment_method}")
+        if not payment_method or payment_method not in ['COD', 'RAZORPAY']:
+            messages.error(request, 'Please select a valid payment method.')
+            return render(request, 'checkout.html', {
+                'cart_items': cart_items,
+                'total_price': total_price,
+                'buy_now_item': buy_now_item
+            })
         
         # Resell FROM details
         from_name = request.POST.get('from_name', '')
@@ -2030,6 +2400,16 @@ def add_to_cart(request):
     
     try:
         product = Product.objects.get(id=product_id, is_active=True)
+
+        if product.stock <= 0:
+            if is_ajax:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'This item is out of stock'
+                }, status=400)
+            messages.error(request, f"{product.name} is out of stock")
+            return redirect('product-details', product_id=product.id)
+
         cart_item, created = Cart.objects.get_or_create(
             user=request.user,
             product=product,
@@ -2037,7 +2417,10 @@ def add_to_cart(request):
         )
         
         if not created:
-            cart_item.quantity += quantity
+            new_qty = cart_item.quantity + quantity
+            if new_qty > product.stock:
+                new_qty = product.stock
+            cart_item.quantity = new_qty
             cart_item.save()
         
         # Get total cart count
@@ -2064,6 +2447,40 @@ def add_to_cart(request):
             return redirect('shop')
 
 
+@require_POST
+def request_stock_notification(request, product_id):
+    """Capture email to notify when a product is restocked."""
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    product = get_object_or_404(Product, id=product_id)
+
+    email = request.POST.get('email') or (request.user.email if request.user.is_authenticated else '')
+    if not email:
+        message = 'Please provide an email so we can notify you.'
+        if is_ajax:
+            return JsonResponse({'success': False, 'message': message}, status=400)
+        messages.error(request, message)
+        return redirect('product-details', product_id=product.id)
+
+    notification, created = ProductStockNotification.objects.get_or_create(
+        product=product,
+        email=email,
+        defaults={'user': request.user if request.user.is_authenticated else None}
+    )
+
+    if not created and request.user.is_authenticated and notification.user is None:
+        notification.user = request.user
+        notification.save(update_fields=['user'])
+
+    message = 'We will email you as soon as this item is back in stock.' if created else 'You are already subscribed for a restock alert.'
+
+    if is_ajax:
+        return JsonResponse({'success': True, 'message': message})
+
+    messages.success(request, message)
+    next_url = request.META.get('HTTP_REFERER') or reverse('product-details', args=[product.id])
+    return redirect(next_url)
+
+
 @login_required(login_url='login')
 def remove_from_cart(request, cart_id):
     """Remove product from cart"""
@@ -2083,6 +2500,12 @@ def ajax_toggle_cart(request, product_id):
     """AJAX endpoint to toggle product in/out of cart"""
     try:
         product = Product.objects.get(id=product_id)
+        if product.stock <= 0:
+            return JsonResponse({
+                'success': False,
+                'message': 'This item is out of stock',
+                'in_cart': False
+            }, status=400)
         cart_item = Cart.objects.filter(user=request.user, product=product).first()
         
         if cart_item:
@@ -2896,16 +3319,19 @@ def admin_delete_review(request, review_id):
 def order_confirmation(request, order_id):
     """Order Confirmation Page"""
     order = get_object_or_404(Order, id=order_id, user=request.user)
+    # If payment method is Razorpay and not paid, redirect to payment page
+    if order.payment_method == 'RAZORPAY' and order.payment_status != 'PAID' and order.payment_status != 'PROCESSING':
+        messages.warning(request, 'Please complete your payment to confirm the order.')
+        return redirect('razorpay_payment', order_id=order.id)
     context = {
         'order': order,
         'order_items': order.items.all(),
     }
     return render(request, 'order_confirmation.html', context)
 
-
 @login_required(login_url='login')
 def razorpay_payment(request, order_id):
-    """Razorpay Payment Page with Order Creation"""
+    """Razorpay Payment Page with OSrder Creation"""
     import razorpay
     
     order = get_object_or_404(Order, id=order_id, user=request.user)
@@ -2921,11 +3347,17 @@ def razorpay_payment(request, order_id):
     try:
         # Create Razorpay client
         client = razorpay.Client(auth=(razorpay_key, razorpay_secret))
-        
+
+        # Amount in paise (ensure int to avoid float issues)
+        amount_paise = int(order.total_amount * 100)
+        if amount_paise <= 0:
+            messages.error(request, 'Invalid order amount for payment')
+            return redirect('order_confirmation', order_id=order.id)
+
         # Create Razorpay order if not already created
         if not order.razorpay_order_id:
             razorpay_order = client.order.create({
-                'amount': int(order.total_amount * 100),  # Amount in paise
+                'amount': amount_paise,
                 'currency': 'INR',
                 'receipt': order.order_number,
                 'notes': {
@@ -2937,13 +3369,13 @@ def razorpay_payment(request, order_id):
             
             # Save Razorpay order ID
             order.razorpay_order_id = razorpay_order['id']
-            order.save()
+            order.save(update_fields=['razorpay_order_id'])
         
         context = {
             'order': order,
             'razorpay_key': razorpay_key,
             'razorpay_order_id': order.razorpay_order_id,
-            'order_amount': int(order.total_amount * 100),  # Convert to paise
+            'order_amount': amount_paise,
         }
         return render(request, 'razorpay_payment.html', context)
         
@@ -2984,21 +3416,27 @@ def razorpay_payment_success(request):
             order.order_status = 'PROCESSING'
             order.razorpay_payment_id = payment_id
             order.razorpay_signature = signature
-            order.save()
+            order.save(update_fields=['payment_status', 'order_status', 'razorpay_payment_id', 'razorpay_signature'])
             
             # Clear cart
             Cart.objects.filter(user=request.user).delete()
             
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'redirect': reverse('order_confirmation', args=[order.id])})
             messages.success(request, 'Payment successful! Your order is being processed.')
             return redirect('order_confirmation', order_id=order.id)
             
         except Exception as e:
             order.payment_status = 'FAILED'
-            order.save()
+            order.save(update_fields=['payment_status'])
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'message': 'Payment verification failed'}, status=400)
             messages.error(request, 'Payment verification failed')
             return redirect('checkout')
             
     except Exception as e:
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'message': f'Error processing payment: {str(e)}'}, status=400)
         messages.error(request, f'Error processing payment: {str(e)}')
         return redirect('checkout')
 
@@ -3017,10 +3455,13 @@ def razorpay_payment_cancel(request, order_id):
     return redirect('checkout')
 
 
-@login_required(login_url='login')
+from django.views.decorators.csrf import csrf_exempt
+
+
+@csrf_exempt
 @require_POST
 def razorpay_webhook(request):
-    """Handle Razorpay Webhook Events"""
+    """Handle Razorpay Webhook Events (no auth, signature verified)"""
     import razorpay
     import json
     from django.views.decorators.csrf import csrf_exempt
@@ -3218,258 +3659,388 @@ def order_details(request, order_number):
         return redirect('order_list')
 
 
+@login_required(login_url='login')
+@never_cache
 def download_invoice(request, order_number):
     """Generate and download PDF invoice for an order"""
-    if not request.user.is_authenticated:
-        return redirect('login')
+    import os
+    import traceback
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
+    from io import BytesIO
+    
+    # Register HEIF/AVIF support for Pillow
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except ImportError:
+        pass  # pillow-heif not installed, will fall back to showing '-'
     
     try:
-        import os
-        from reportlab.lib.pagesizes import letter, A4
-        from reportlab.lib import colors
-        from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
-        from io import BytesIO
-        
         # Get order
+        order_filter = {'order_number': order_number}
+        if not request.user.is_staff:
+            order_filter['user'] = request.user
+
         try:
-            order = Order.objects.get(order_number=order_number, user=request.user)
+            order = Order.objects.get(**order_filter)
             order_items = OrderItem.objects.filter(order=order)
         except Order.DoesNotExist:
-            messages.error(request, 'Order not found')
-            return redirect('order_list')
+            # Don't use messages here; just return error response
+            if request.user.is_staff:
+                return redirect('admin_invoice_inventory')
+            return HttpResponse('Order not found.', status=404)
         
-        def build_invoice(currency_symbol):
-            """Build PDF invoice with error handling"""
-            # Create PDF buffer
-            buffer = BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=A4, 
-                                    rightMargin=36, leftMargin=36,
-                                    topMargin=36, bottomMargin=30)
-            
-            elements = []
-            styles = getSampleStyleSheet()
-            styles.add(ParagraphStyle(name='Center', alignment=TA_CENTER))
-            styles.add(ParagraphStyle(name='Right', alignment=TA_RIGHT))
-            styles.add(ParagraphStyle(name='Left', alignment=TA_LEFT))
-            styles.add(ParagraphStyle(name='TitleRight', alignment=TA_RIGHT, fontSize=22, leading=24))
-            styles.add(ParagraphStyle(name='Label', fontSize=9, textColor=colors.HexColor('#6b6b6b')))
-            styles.add(ParagraphStyle(name='Body', fontSize=10, leading=14))
-            styles.add(ParagraphStyle(name='Small', fontSize=9, leading=12))
-            styles.add(ParagraphStyle(name='Total', fontSize=14, leading=16))
-            
-            def money(value):
-                return f"{currency_symbol}{float(value):.2f}"
-            
-            # Try to load logos
-            logo_primary_path = os.path.join(settings.BASE_DIR, 'Hub', 'static', 'assets', 'img', 'logo', 'logo-white.png')
-            logo_secondary_path = os.path.join(settings.BASE_DIR, 'Hub', 'static', 'assets', 'img', 'logo', 'logo-invoice.png')
-            
-            logo_primary = None
-            try:
-                if os.path.exists(logo_primary_path):
-                    logo_primary = Image(logo_primary_path, width=120, height=40)
-            except Exception:
-                pass
-            
-            logo_secondary = None
-            try:
-                if os.path.exists(logo_secondary_path):
-                    logo_secondary = Image(logo_secondary_path, width=110, height=36)
-            except Exception:
-                pass
-            
-            # Header
-            header_left = logo_primary if logo_primary else Paragraph('<b>FashionHub</b>', styles['Body'])
-            header_right = Paragraph('<b>INVOICE</b>', styles['TitleRight'])
-            header_table = Table([[header_left, header_right]], colWidths=[3.5*inch, 2.5*inch])
-            header_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-            ]))
-            elements.append(header_table)
-            elements.append(Spacer(1, 14))
-            
-            # Billing info
-            billed_to = Paragraph('<b>BILLED TO:</b>', styles['Label'])
-            address_text = order.shipping_address.replace('\n', '<br/>')
-            billed_body = Paragraph(address_text, styles['Body'])
-            invoice_info = Paragraph(
-                f"<b>Invoice No.</b> {order.order_number}<br/>"
-                f"<b>Date</b> {order.created_at.strftime('%d %B %Y')}",
-                styles['Body']
-            )
-            info_table = Table([
-                [billed_to, Paragraph('', styles['Body'])],
-                [billed_body, invoice_info]
-            ], colWidths=[3.5*inch, 2.5*inch])
-            info_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('ALIGN', (1, 1), (1, 1), 'RIGHT'),
-                ('TOPPADDING', (0, 0), (-1, -1), 2),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ]))
-            elements.append(info_table)
-            elements.append(Spacer(1, 10))
-            
-            # Divider
-            divider = Table([['']], colWidths=[6*inch])
-            divider.setStyle(TableStyle([
-                ('LINEBELOW', (0, 0), (-1, -1), 0.6, colors.black),
-            ]))
-            elements.append(divider)
-            elements.append(Spacer(1, 12))
-            
-            # Items table
-            items = [['Image', 'Item', 'Qty', 'Unit Price', 'Total']]
-            
-            for item in order_items:
-                item_total = Decimal(str(item.product_price)) * Decimal(str(item.quantity))
-                
-                # Try to add product image
-                img_cell = Paragraph('-', styles['Small'])
-                
-                if item.product_image and str(item.product_image).strip():
-                    try:
-                        img_path_str = str(item.product_image).strip()
-                        
-                        # Handle media URLs - convert /media/products/... to absolute path
-                        if img_path_str.startswith('/media/'):
-                            img_path_str = img_path_str[1:]  # Remove leading slash
-                        elif img_path_str.startswith('media/'):
-                            pass  # Already correct
-                        
-                        # Build full path
-                        img_path = os.path.join(settings.BASE_DIR, img_path_str)
-                        
-                        # Try to load image
-                        if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
-                            try:
-                                img_cell = Image(img_path, width=0.6*inch, height=0.6*inch)
-                            except Exception:
-                                # If image fails to load, keep default dash
-                                pass
-                    except Exception:
-                        # Keep default dash if image path processing fails
-                        pass
-                
-                items.append([
-                    img_cell,
-                    Paragraph(item.product_name, styles['Small']),
-                    str(item.quantity),
-                    money(item.product_price),
-                    money(item_total),
-                ])
-            
-            items_table = Table(items, colWidths=[0.7*inch, 2.5*inch, 0.7*inch, 0.9*inch, 0.9*inch])
-            items_table.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('LINEBELOW', (0, 0), (-1, 0), 0.8, colors.black),
-                ('LINEBELOW', (0, 1), (-1, -1), 0.3, colors.HexColor('#9e9e9e')),
-                ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-                ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
-                ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),
-                ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ]))
-            elements.append(items_table)
-            elements.append(Spacer(1, 14))
-            
-            # Totals
-            tax_percent = (float(order.tax) / float(order.subtotal) * 100) if float(order.subtotal) > 0 else 0.0
-            totals = [
-                ['Subtotal', money(order.subtotal)],
-                [f"Tax ({tax_percent:.0f}%)", money(order.tax)],
-                ['Shipping', money(order.shipping_cost)],
-                ['<b>TOTAL</b>', f'<b>{money(order.total_amount)}</b>'],
+        # Create PDF buffer
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                                rightMargin=36, leftMargin=36,
+                                topMargin=36, bottomMargin=30)
+        
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Define custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#1e293b'),
+            spaceAfter=6,
+            fontName='Helvetica-Bold'
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=11,
+            textColor=colors.HexColor('#1e293b'),
+            spaceAfter=8,
+            fontName='Helvetica-Bold',
+            borderPadding=6,
+            backgroundColor=colors.HexColor('#f8fafc'),
+            borderColor=colors.HexColor('#e2e8f0'),
+            borderWidth=0.5,
+            leftIndent=6
+        )
+        
+        label_style = ParagraphStyle(
+            'Label',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#64748b'),
+            fontName='Helvetica-Bold'
+        )
+        
+        value_style = ParagraphStyle(
+            'Value',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#1e293b'),
+            fontName='Helvetica'
+        )
+        
+        # ===== HEADER SECTION =====
+        header_data = [
+            [
+                Paragraph('<b>FashionHub</b>', styles['Heading2']),
+                Paragraph(f'<b style="font-size: 18">INVOICE</b>', styles['Heading2'])
             ]
-            totals_table = Table(totals, colWidths=[1.5*inch, 1.0*inch])
-            totals_table.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (-1, -2), 'RIGHT'),
-                ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, -1), (-1, -1), 12),
-                ('LINEABOVE', (0, -1), (-1, -1), 0.8, colors.black),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ]))
-            totals_wrap = Table([['', totals_table]], colWidths=[4.0*inch, 2.0*inch])
-            totals_wrap.setStyle(TableStyle([
-                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-            ]))
-            elements.append(totals_wrap)
-            elements.append(Spacer(1, 18))
-            
-            # Thank you message
-            elements.append(Paragraph('<b>Thank you for your purchase!</b>', styles['Body']))
-            elements.append(Spacer(1, 12))
-            
-            # Payment information
-            payment_status = "Paid" if order.payment_status == 'PAID' else "Pending"
-            payment_block = Paragraph(
-                f'<b>PAYMENT INFORMATION</b><br/>'
-                f'Method: {order.payment_method.upper()}<br/>'
-                f'Status: {payment_status}<br/>'
-                f'Order Status: {order.get_order_status_display()}',
-                styles['Small']
-            )
-            
-            signature_name = order.shipping_address.split('\n')[0] if order.shipping_address else 'Customer'
-            signature_block = Paragraph(
-                f"<b>{signature_name}</b>",
-                styles['Small']
-            )
-            signature_cell = logo_secondary if logo_secondary else signature_block
-            
-            payment_table = Table([[payment_block, signature_cell]], colWidths=[3.5*inch, 2.5*inch])
-            payment_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-            ]))
-            elements.append(payment_table)
-            
-            # Build PDF
-            doc.build(elements)
-            pdf = buffer.getvalue()
-            buffer.close()
-            return pdf
+        ]
+        header_table = Table(header_data, colWidths=[4*inch, 2*inch])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ]))
+        elements.append(header_table)
+        elements.append(Spacer(1, 12))
         
-        # Try to generate PDF with rupees, fallback to ASCII
+        # ===== INVOICE INFO ROW =====
+        # Ensure a font that supports the rupee symbol is registered.
+        # Try several common system font locations and register the first available TTF.
         try:
-            pdf_data = build_invoice('₹')
-        except UnicodeEncodeError:
-            try:
-                pdf_data = build_invoice('Rs.')
-            except Exception as inner_e:
-                import traceback
-                error_msg = f'Error generating PDF: {str(inner_e)}'
-                print(f"PDF Generation Error: {error_msg}")
-                print(traceback.format_exc())
-                messages.error(request, error_msg)
-                return redirect('order_list')
-        except Exception as e:
-            import traceback
-            error_msg = f'Error generating PDF: {str(e)}'
-            print(f"PDF Generation Error: {error_msg}")
-            print(traceback.format_exc())
-            messages.error(request, error_msg)
-            return redirect('order_list')
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            candidate_paths = [
+                # Common Linux paths
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+                '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+                # Common Windows paths
+                'C:/Windows/Fonts/DejaVuSans.ttf',
+                'C:/Windows/Fonts/NotoSans-Regular.ttf',
+                'C:/Windows/Fonts/seguiemj.ttf',
+                'C:/Windows/Fonts/SegoeUIEmoji.ttf',
+                'C:/Windows/Fonts/arialuni.ttf',
+                'C:/Windows/Fonts/arial.ttf',
+            ]
+
+            base_font_name = None
+            bold_font_name = None
+            for path in candidate_paths:
+                if os.path.exists(path):
+                    try:
+                        pdfmetrics.registerFont(TTFont('Invoice', path))
+                        base_font_name = 'Invoice'
+                        # try to find a bold variant nearby
+                        bold_candidates = [
+                            path.replace('.ttf', ' Bold.ttf'),
+                            path.replace('.ttf', '-Bold.ttf'),
+                            path.replace('.ttf', 'Bd.ttf'),
+                            path.replace('.ttf', 'Bold.ttf'),
+                        ]
+                        for bpath in bold_candidates:
+                            if os.path.exists(bpath):
+                                try:
+                                    pdfmetrics.registerFont(TTFont('Invoice-Bold', bpath))
+                                    bold_font_name = 'Invoice-Bold'
+                                    break
+                                except Exception:
+                                    continue
+                        if not bold_font_name:
+                            # fallback to same font for bold if no bold file found
+                            bold_font_name = base_font_name
+                        break
+                    except Exception:
+                        continue
+
+            if not base_font_name:
+                base_font_name = 'Helvetica'
+                bold_font_name = 'Helvetica-Bold'
+        except Exception:
+            base_font_name = 'Helvetica'
+            bold_font_name = 'Helvetica-Bold'
+
+        # apply chosen fonts to styles
+        value_style.fontName = base_font_name
+        title_style.fontName = bold_font_name
+        heading_style.fontName = bold_font_name
+        label_style.fontName = bold_font_name
+
+        invoice_info = f"""
+        <b>Invoice #:</b> {order.order_number}<br/>
+        <b>Date:</b> {order.created_at.strftime('%d %B %Y')}<br/>
+        <b>Time:</b> {order.created_at.strftime('%H:%M %p')}
+        """
+
+        # Keep Order Status and Payment Method but remove Payment Status per request
+        order_info = f"""
+        <b>Order Status:</b> {order.get_order_status_display()}<br/>
+        <b>Payment Method:</b> {order.payment_method.upper()}
+        """
+
+        info_data = [
+            [Paragraph(invoice_info, value_style), Paragraph(order_info, value_style)]
+        ]
+        info_table = Table(info_data, colWidths=[3*inch, 3*inch])
+        info_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        elements.append(info_table)
+        elements.append(Spacer(1, 14))
         
-        # Return PDF
+        # ===== BILLING & SHIPPING SECTION =====
+        # Log invoice generation start
+        try:
+            logger = logging.getLogger(__name__)
+            logger.info("Generating invoice PDF for order %s user=%s", order_number, request.user.username if hasattr(request.user, 'username') else str(request.user))
+        except Exception:
+            pass
+
+        billing_data = [
+            [
+                Paragraph('<b style="font-size: 11; color: #1e293b">BILL TO</b>', styles['Normal']),
+                Paragraph('<b style="font-size: 11; color: #1e293b">SHIP TO</b>', styles['Normal'])
+            ],
+            [
+                Paragraph(
+                    f'<b>{order.user.get_full_name() or order.user.username}</b><br/>'
+                    f'{order.user.email}<br/>'
+                    f'{order.user.userprofile.mobile_number if hasattr(order.user, "userprofile") and order.user.userprofile.mobile_number else "N/A"}',
+                    value_style
+                ),
+                Paragraph((order.shipping_address or '').replace('\n', '<br/>'), value_style)
+            ]
+        ]
+        billing_table = Table(billing_data, colWidths=[3*inch, 3*inch])
+        billing_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f8fafc')),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#e2e8f0')),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(billing_table)
+        elements.append(Spacer(1, 14))
+        
+        # ===== ITEMS TABLE ===== (with product image and name combined)
+        items_data = [[ 'Product', 'Qty', 'Unit Price', 'Total' ]]
+
+        for item in order_items:
+            item_total = Decimal(str(item.product_price)) * Decimal(str(item.quantity))
+
+            # product image and name cell (merged)
+            product_cell = None
+            img_cell = None
+            
+            if item.product_image and str(item.product_image).strip():
+                img_path_str = str(item.product_image).strip()
+                # ignore external URLs
+                if not img_path_str.startswith('http'):
+                    # use MEDIA_ROOT if configured, otherwise fallback to BASE_DIR/media
+                    media_root = getattr(settings, 'MEDIA_ROOT', None) or os.path.join(settings.BASE_DIR, 'media')
+                    # Normalize common prefixes: '/media/', 'media/', or leading '/'
+                    if img_path_str.startswith('/media/'):
+                        img_path_str = img_path_str[len('/media/'):]
+                    elif img_path_str.startswith('media/'):
+                        img_path_str = img_path_str[len('media/'):]
+                    elif img_path_str.startswith('/'):
+                        img_path_str = img_path_str[1:]
+                    img_path = os.path.join(media_root, img_path_str)
+                    if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+                        # Try to load image with PIL (with AVIF support via pillow-heif)
+                        try:
+                            from PIL import Image as PILImage
+                            # Open image to verify it's readable
+                            with open(img_path, 'rb') as f:
+                                test_img = PILImage.open(f)
+                                test_img.load()  # Force load to catch errors
+                            # Image is readable, use it
+                            img_cell = Image(img_path, width=0.5*inch, height=0.5*inch)
+                        except Exception:
+                            # Image format not supported, show dash
+                            img_cell = None
+            
+            # Create product cell with image (if available) and name
+            if img_cell:
+                # Use a nested table: image on left, name on right
+                from reportlab.platypus import Table as NestedTable, TableStyle as NestedTableStyle
+                product_inner_data = [[img_cell, Paragraph(item.product_name[:35], value_style)]]
+                product_nested = NestedTable(product_inner_data, colWidths=[0.55*inch, 2.45*inch])
+                product_nested.setStyle(NestedTableStyle([
+                    ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                    ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]))
+                product_cell = product_nested
+            else:
+                # No image, just show name
+                product_cell = Paragraph(item.product_name[:40], value_style)
+
+            items_data.append([
+                product_cell,
+                str(item.quantity),
+                f"Rs.{float(item.product_price):.2f}",
+                f"Rs.{float(item_total):.2f}",
+            ])
+
+        items_table = Table(items_data, colWidths=[3.0*inch, 0.6*inch, 1.0*inch, 1.0*inch])
+        items_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f8fafc')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1e293b')),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), bold_font_name),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#e2e8f0')),
+            ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (1, -1), 'CENTER'),
+            ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
+            ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('TOPPADDING', (0, 1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ]))
+        elements.append(items_table)
+        elements.append(Spacer(1, 12))
+        
+        # ===== TOTALS SECTION =====
+        tax_amount = float(order.tax)
+        subtotal = float(order.subtotal)
+        shipping = float(order.shipping_cost)
+        total = float(order.total_amount)
+        
+        totals_data = [
+            ['Subtotal', '', f'Rs.{subtotal:.2f}'],
+            ['Tax', '', f'Rs.{tax_amount:.2f}'],
+            ['Shipping', '', f'Rs.{shipping:.2f}'],
+            ['TOTAL', '', f'Rs.{total:.2f}'],
+        ]
+        
+        totals_table = Table(totals_data, colWidths=[2.5*inch, 1.5*inch, 2.0*inch])
+        totals_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+            ('FONTSIZE', (0, 0), (-1, 2), 9),
+            ('FONTSIZE', (0, 3), (-1, 3), 11),
+            ('FONTNAME', (0, 0), (-1, 2), base_font_name),
+            ('FONTNAME', (0, 3), (-1, 3), bold_font_name),
+            ('TOPPADDING', (0, 0), (-1, 2), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 2), 8),
+            ('TOPPADDING', (0, 3), (-1, 3), 12),
+            ('BOTTOMPADDING', (0, 3), (-1, 3), 12),
+            ('LINEABOVE', (0, 3), (-1, 3), 2, colors.HexColor('#1e293b')),
+            ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#f8fafc')),
+            ('TEXTCOLOR', (0, 0), (-1, 2), colors.HexColor('#475569')),
+            ('TEXTCOLOR', (0, 3), (-1, 3), colors.HexColor('#1e293b')),
+        ]))
+        elements.append(totals_table)
+        elements.append(Spacer(1, 16))
+        
+        # ===== NOTES SECTION =====
+        elements.append(Paragraph('<b style="font-size: 10; color: #1e293b">ORDER NOTES</b>', styles['Normal']))
+        elements.append(Spacer(1, 6))
+        
+        notes_text = f"""
+        <font size="9" color="#475569">
+        <b>Customer Notes:</b> {order.customer_notes or 'No special notes'}<br/><br/>
+        Thank you for your purchase! Your order is being processed and will be shipped soon.
+        </font>
+        """
+        elements.append(Paragraph(notes_text, value_style))
+        elements.append(Spacer(1, 12))
+        
+        # ===== FOOTER =====
+        footer_text = f"""
+        <font size="8" color="#64748b">
+        <b>FashionHub © 2026</b> | Invoice #{order.order_number} | Generated on {order.created_at.strftime('%d %b %Y at %H:%M')}
+        </font>
+        """
+        elements.append(Paragraph(footer_text, styles['Normal']))
+        
+        # Build PDF
+        doc.build(elements)
+        pdf_data = buffer.getvalue()
+        buffer.close()
+        
+        # Return PDF with proper headers
         response = HttpResponse(pdf_data, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="Invoice_{order.order_number}.pdf"'
+        response['Content-Length'] = len(pdf_data)
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
         return response
         
-    except ImportError as ie:
-        messages.error(request, 'PDF library not installed. Please contact administrator.')
-        return redirect('order_list')
     except Exception as e:
-        messages.error(request, f'Unexpected error: {str(e)}')
-        return redirect('order_list')
+        logger = logging.getLogger(__name__)
+        logger.exception("Error generating invoice for %s: %s", order_number, str(e))
+        # Return error response without trying to use messages
+        return HttpResponse('Error generating invoice. Please contact support.', status=500)

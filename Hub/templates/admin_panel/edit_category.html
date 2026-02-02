@@ -28,7 +28,7 @@
                     {% endfor %}
                 {% endif %}
                 
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
                     
                     <div class="mb-3">
@@ -44,17 +44,40 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label" for="icon_class">Icon Class *</label>
-                        <input type="text" class="form-control" id="icon_class" name="icon_class" value="{{ category.icon_class }}" required>
+                        <label class="form-label">Icon Type</label>
+                        <div class="btn-group w-100 mb-2" role="group">
+                            <input type="radio" class="btn-check" name="icon_type" id="icon_type_image" value="image" {% if category.icon_image %}checked{% endif %}>
+                            <label class="btn btn-outline-primary" for="icon_type_image">Upload Image</label>
+                            
+                            <input type="radio" class="btn-check" name="icon_type" id="icon_type_fontawesome" value="fontawesome" {% if not category.icon_image %}checked{% endif %}>
+                            <label class="btn btn-outline-primary" for="icon_type_fontawesome">FontAwesome Icon</label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3" id="image_upload_section" style="{% if not category.icon_image %}display: none;{% endif %}">
+                        <label class="form-label" for="icon_image">Icon Image</label>
+                        {% if category.icon_image %}
+                            <div class="mb-2">
+                                <img src="{{ category.icon_image.url }}" alt="Current icon" style="width: 60px; height: 60px; object-fit: contain; border: 1px solid #ddd; padding: 5px; border-radius: 5px;">
+                                <small class="d-block text-muted">Current icon</small>
+                            </div>
+                        {% endif %}
+                        <input type="file" class="form-control" id="icon_image" name="icon_image" accept="image/*">
+                        <div class="form-text">Upload PNG with transparent background (recommended size: 64x64px)</div>
+                    </div>
+                    
+                    <div class="mb-3" id="fontawesome_section" style="{% if category.icon_image %}display: none;{% endif %}">
+                        <label class="form-label" for="icon_class">Icon Class</label>
+                        <input type="text" class="form-control" id="icon_class" name="icon_class" value="{{ category.icon_class }}">
                         <div class="form-text">
                             FontAwesome icon class. Browse icons at <a href="https://fontawesome.com/icons" target="_blank">FontAwesome.com</a>
                         </div>
                     </div>
                     
-                    <div class="mb-3">
+                    <div class="mb-3" id="icon_color_section" style="{% if category.icon_image %}display: none;{% endif %}">
                         <label class="form-label" for="icon_color">Icon Color</label>
                         <input type="color" class="form-control" id="icon_color" name="icon_color" value="{{ category.icon_color }}">
-                        <div class="form-text">Choose icon color</div>
+                        <div class="form-text">Choose icon color (only for FontAwesome icons)</div>
                     </div>
                     
                     <div class="mb-3">
@@ -99,8 +122,12 @@
             </div>
             <div class="card-body">
                 <div class="text-center">
-                    <div id="preview-icon" style="display: inline-block; background: {{ category.background_gradient }}; padding: 15px; border-radius: 10px; margin-bottom: 8px;">
-                        <i id="preview-icon-element" class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                    <div id="preview-icon" style="display: inline-flex; align-items: center; justify-content: center; background: {{ category.background_gradient }}; padding: 15px; border-radius: 10px; margin-bottom: 8px; min-width: 70px; min-height: 70px;">
+                        {% if category.icon_image %}
+                            <img id="preview-icon-image" src="{{ category.icon_image.url }}" alt="{{ category.name }}" style="width: 36px; height: 36px; object-fit: contain;">
+                        {% else %}
+                            <i id="preview-icon-element" class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                        {% endif %}
                     </div>
                     <h6 id="preview-name" style="color: #333; font-weight: 600; font-size: 12px;">{{ category.name }}</h6>
                 </div>
@@ -128,6 +155,44 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Icon type toggle
+    const iconTypeImage = document.getElementById('icon_type_image');
+    const iconTypeFontAwesome = document.getElementById('icon_type_fontawesome');
+    const imageUploadSection = document.getElementById('image_upload_section');
+    const fontAwesomeSection = document.getElementById('fontawesome_section');
+    const iconColorSection = document.getElementById('icon_color_section');
+    const iconImageInput = document.getElementById('icon_image');
+    const previewIcon = document.getElementById('preview-icon');
+    
+    function toggleIconType() {
+        if (iconTypeImage.checked) {
+            imageUploadSection.style.display = 'block';
+            fontAwesomeSection.style.display = 'none';
+            iconColorSection.style.display = 'none';
+        } else {
+            imageUploadSection.style.display = 'none';
+            fontAwesomeSection.style.display = 'block';
+            iconColorSection.style.display = 'block';
+        }
+    }
+    
+    if (iconTypeImage) iconTypeImage.addEventListener('change', toggleIconType);
+    if (iconTypeFontAwesome) iconTypeFontAwesome.addEventListener('change', toggleIconType);
+    
+    // Image preview
+    if (iconImageInput) {
+        iconImageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    previewIcon.innerHTML = '<img id="preview-icon-image" src="' + event.target.result + '" alt="Preview" style="width: 36px; height: 36px; object-fit: contain;">';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+    
     // Live preview update
     const nameInput = document.getElementById('name');
     const iconClassInput = document.getElementById('icon_class');
@@ -135,7 +200,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const bgGradientInput = document.getElementById('background_gradient');
     
     const previewName = document.getElementById('preview-name');
-    const previewIcon = document.getElementById('preview-icon');
     const previewIconElement = document.getElementById('preview-icon-element');
     
     // Name change

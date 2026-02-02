@@ -1,13 +1,22 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils.text import slugify
+from django.utils import timezone
 
 class CategoryIcon(models.Model):
     """Category icons for Shop By Department section"""
     name = models.CharField(max_length=100, help_text="Category name (e.g., Mobiles, Food & Health)")
     icon_class = models.CharField(
         max_length=100,
-        help_text="FontAwesome icon class (e.g., 'fas fa-mobile-alt')"
+        blank=True,
+        null=True,
+        help_text="FontAwesome icon class (e.g., 'fas fa-mobile-alt') - DEPRECATED: Use icon_image instead"
+    )
+    icon_image = models.ImageField(
+        upload_to='category_icons/',
+        blank=True,
+        null=True,
+        help_text="Upload category icon image (PNG with transparent background recommended)"
     )
     category_key = models.CharField(
         max_length=50,
@@ -22,7 +31,7 @@ class CategoryIcon(models.Model):
     icon_color = models.CharField(
         max_length=20,
         default="#0288d1",
-        help_text="Icon color (hex code)"
+        help_text="Icon color (hex code) - Only used for FontAwesome icons"
     )
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0, help_text="Display order (lower numbers appear first)")
@@ -204,7 +213,16 @@ class Product(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.name)
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            
+            # Make slug unique by appending counter if needed
+            while Product.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            
+            self.slug = slug
         super().save(*args, **kwargs)
 
     def progress_percent(self):
@@ -234,6 +252,28 @@ class ProductImage(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - Image {self.order}"
+
+
+class ProductStockNotification(models.Model):
+    """Record of users requesting restock notifications"""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_notifications')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_notifications')
+    email = models.EmailField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    is_sent = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('product', 'email')
+        ordering = ['-created_at']
+
+    def mark_sent(self):
+        self.is_sent = True
+        self.notified_at = timezone.now()
+        self.save(update_fields=['is_sent', 'notified_at'])
+
+    def __str__(self):
+        return f"Notify {self.email} about {self.product.name}"
 
 
 class DealCountdown(models.Model):
@@ -609,3 +649,249 @@ class AdminEmailSettings(models.Model):
     def __str__(self):
         return f"Admin Email: {self.admin_email}"
 
+
+class BrandPartner(models.Model):
+    """Brand Partner logos for homepage carousel"""
+    name = models.CharField(max_length=100, help_text="Brand name")
+    logo = models.ImageField(upload_to='brand_partners/', help_text="Brand logo image")
+    link_url = models.URLField(blank=True, null=True, help_text="Optional link URL")
+    order = models.IntegerField(default=0, help_text="Display order (lower numbers first)")
+    is_active = models.BooleanField(default=True, help_text="Show/hide brand")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = "Brand Partner"
+        verbose_name_plural = "Brand Partners"
+    
+    def __str__(self):
+        return self.name
+
+
+# ============================================
+# NEW FEATURES - Order Management Extensions
+# ============================================
+
+class LoyaltyPoints(models.Model):
+    """Customer loyalty points system"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='loyalty_points')
+    total_points = models.IntegerField(default=0, help_text="Total points earned")
+    points_used = models.IntegerField(default=0, help_text="Points redeemed")
+    points_available = models.IntegerField(default=0, help_text="Available points to use")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name_plural = "Loyalty Points"
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.points_available} points"
+    
+    def add_points(self, points, description=""):
+        """Add points to user account"""
+        self.total_points += points
+        self.points_available += points
+        self.save()
+        
+        # Create transaction record
+        PointsTransaction.objects.create(
+            user=self.user,
+            points=points,
+            transaction_type='EARNED',
+            description=description
+        )
+    
+    def redeem_points(self, points, description=""):
+        """Redeem points from user account"""
+        if self.points_available >= points:
+            self.points_used += points
+            self.points_available -= points
+            self.save()
+            
+            # Create transaction record
+            PointsTransaction.objects.create(
+                user=self.user,
+                points=points,
+                transaction_type='REDEEMED',
+                description=description
+            )
+            return True
+        return False
+
+
+class PointsTransaction(models.Model):
+    """History of loyalty points transactions"""
+    TRANSACTION_TYPES = [
+        ('EARNED', 'Points Earned'),
+        ('REDEEMED', 'Points Redeemed'),
+        ('EXPIRED', 'Points Expired'),
+        ('ADJUSTED', 'Manual Adjustment'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='points_transactions')
+    points = models.IntegerField()
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    description = models.TextField(blank=True)
+    order = models.ForeignKey('Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='points_transactions')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Points Transaction"
+        verbose_name_plural = "Points Transactions"
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.transaction_type} {self.points} points"
+
+
+class ReturnRequest(models.Model):
+    """Product return requests"""
+    RETURN_REASONS = [
+        ('DEFECTIVE', 'Defective/Damaged Product'),
+        ('WRONG_ITEM', 'Wrong Item Received'),
+        ('NOT_AS_DESCRIBED', 'Not As Described'),
+        ('SIZE_ISSUE', 'Size/Fit Issue'),
+        ('QUALITY_ISSUE', 'Quality Issue'),
+        ('CHANGED_MIND', 'Changed Mind'),
+        ('OTHER', 'Other Reason'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Review'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('PICKUP_SCHEDULED', 'Pickup Scheduled'),
+        ('PICKED_UP', 'Picked Up'),
+        ('REFUND_INITIATED', 'Refund Initiated'),
+        ('REFUND_COMPLETED', 'Refund Completed'),
+    ]
+    
+    return_number = models.CharField(max_length=20, unique=True, editable=False)
+    order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='return_requests')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='return_requests')
+    order_item = models.ForeignKey('OrderItem', on_delete=models.CASCADE, related_name='return_requests')
+    
+    reason = models.CharField(max_length=30, choices=RETURN_REASONS)
+    description = models.TextField(help_text="Detailed description of the issue")
+    images = models.ImageField(upload_to='returns/', blank=True, null=True, help_text="Upload product images")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    admin_notes = models.TextField(blank=True, help_text="Internal admin notes")
+    
+    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    refund_method = models.CharField(max_length=50, blank=True, help_text="Bank transfer, Original payment method, etc.")
+    
+    pickup_date = models.DateTimeField(null=True, blank=True)
+    refund_date = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Return Request"
+        verbose_name_plural = "Return Requests"
+    
+    def __str__(self):
+        return f"Return #{self.return_number} - Order #{self.order.order_number}"
+    
+    def save(self, *args, **kwargs):
+        if not self.return_number:
+            # Generate unique return number: RET-YYYYMMDD-XXXXX
+            from django.utils import timezone
+            date_str = timezone.now().strftime('%Y%m%d')
+            last_return = ReturnRequest.objects.filter(
+                return_number__startswith=f'RET-{date_str}'
+            ).order_by('-return_number').first()
+            
+            if last_return:
+                last_num = int(last_return.return_number.split('-')[-1])
+                new_num = str(last_num + 1).zfill(5)
+            else:
+                new_num = '00001'
+            
+            self.return_number = f'RET-{date_str}-{new_num}'
+        
+        super().save(*args, **kwargs)
+
+
+class WishlistPriceAlert(models.Model):
+    """Track price changes for wishlist items"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='price_alerts')
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='price_alerts')
+    original_price = models.DecimalField(max_digits=10, decimal_places=2)
+    target_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Alert when price drops below this")
+    is_active = models.BooleanField(default=True)
+    notified = models.BooleanField(default=False, help_text="Has user been notified of price drop?")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Wishlist Price Alert"
+        verbose_name_plural = "Wishlist Price Alerts"
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name}"
+
+
+class Notification(models.Model):
+    """User notifications"""
+    NOTIFICATION_TYPES = [
+        ('ORDER_PLACED', 'Order Placed'),
+        ('ORDER_CONFIRMED', 'Order Confirmed'),
+        ('ORDER_SHIPPED', 'Order Shipped'),
+        ('ORDER_DELIVERED', 'Order Delivered'),
+        ('PRICE_DROP', 'Price Drop Alert'),
+        ('STOCK_AVAILABLE', 'Stock Available'),
+        ('RETURN_APPROVED', 'Return Approved'),
+        ('REFUND_PROCESSED', 'Refund Processed'),
+        ('POINTS_EARNED', 'Loyalty Points Earned'),
+        ('SPECIAL_OFFER', 'Special Offer'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=30, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    link = models.CharField(max_length=500, blank=True, help_text="URL to related page")
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Notification"
+        verbose_name_plural = "Notifications"
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.notification_type}"
+
+
+class EmailLog(models.Model):
+    """Log of sent emails"""
+    EMAIL_TYPES = [
+        ('ORDER_CONFIRMATION', 'Order Confirmation'),
+        ('ORDER_STATUS_UPDATE', 'Order Status Update'),
+        ('DELIVERY_REMINDER', 'Delivery Reminder'),
+        ('REVIEW_REQUEST', 'Review Request'),
+        ('PRICE_ALERT', 'Price Alert'),
+        ('PROMOTIONAL', 'Promotional Email'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_logs', null=True, blank=True)
+    email_to = models.EmailField()
+    email_type = models.CharField(max_length=30, choices=EMAIL_TYPES)
+    subject = models.CharField(max_length=300)
+    order = models.ForeignKey('Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='email_logs')
+    sent_successfully = models.BooleanField(default=False)
+    error_message = models.TextField(blank=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-sent_at']
+        verbose_name = "Email Log"
+        verbose_name_plural = "Email Logs"
+    
+    def __str__(self):
+        return f"{self.email_type} to {self.email_to}"
