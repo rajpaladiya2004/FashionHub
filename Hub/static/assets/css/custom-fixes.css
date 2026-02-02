@@ -1,11 +1,145 @@
 /* ===================================
-   CUSTOM FIXES FOR FASHIONHUB
-   =================================== */
+    CUSTOM FIXES FOR VIBEMALL
+    =================================== */
+
+/* 0. AGGRESSIVE WHITESPACE ELIMINATION */
+html {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    font-size: 100%;
+    font: inherit;
+    vertical-align: baseline;
+}
+
+body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #fff;
+    line-height: 1;
+    border-top: none !important;
+    outline: none !important;
+    position: relative;
+}
+
+/* Force remove any text nodes or inline elements that create whitespace */
+body > script:first-child,
+body > *:first-child:not(header):not(main) {
+    display: none !important;
+}
+
+/* Remove any potential whitespace from the first element */
+body > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    border-top: none !important;
+}
+
+/* Header positioning fix */
+.header {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    position: relative;
+    top: 0;
+    border-top: none !important;
+}
+
+/* Eliminate whitespace from header top */
+.header-top {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    border-top: none !important;
+}
+
+/* Remove any browser default spacing */
+* {
+    box-sizing: border-box;
+}
+
+*:before, *:after {
+    box-sizing: border-box;
+}
+
+/* Force remove any text nodes that might create whitespace */
+body::before {
+    content: '';
+    display: none;
+}
+
+/* Ensure no floating elements create space */
+.clearfix::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+/* Additional aggressive whitespace fixes */
+body > script:first-child + * {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* Remove any potential whitespace from script tags */
+script {
+    display: none !important;
+}
+
+/* Ensure header is absolutely positioned at top */
+.header.d-blue-bg {
+    position: relative;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    z-index: 999;
+}
+
+/* Enhanced submenu styling for better visibility */
+.main-menu nav ul li .submenu {
+    background: #fff;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    border-radius: 5px;
+    padding: 10px 0;
+}
+
+.main-menu nav ul li .submenu li a {
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.main-menu nav ul li .submenu li a i {
+    margin-right: 8px;
+    width: 16px;
+    color: #fcbe00;
+}
+
+.main-menu nav ul li .submenu li a:hover {
+    background: #f8f9fa;
+    color: #fcbe00;
+    padding-left: 25px;
+}
+
+/* Highlight My Orders in submenu */
+.main-menu nav ul li .submenu li a[href*="order_list"] {
+    font-weight: 600;
+    color: #2c5aa0;
+}
+
+.main-menu nav ul li .submenu li a[href*="order_list"]:hover {
+    background: #fcbe00;
+    color: #fff;
+}
 
 /* 1. CUSTOM COLUMN FOR 5 PRODUCTS PER ROW */
 @media (min-width: 1200px) {
     .col-xl-2-5 {
         flex: 0 0 20%;
+        max-width: 20%;
+    }
+}
         max-width: 20%;
     }
 }
@@ -73,6 +207,17 @@
     position: relative;
     z-index: 1;
     margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Shop page action buttons: force perfect circle */
+.action-btn.cart-btn {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
 }
 
 .product__item:hover {
@@ -90,6 +235,9 @@
 .product__content {
     background: transparent;
     padding: 0 10px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Product content spacing */
@@ -104,6 +252,7 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    min-height: 20px;
 }
 
 .product__content .rating ul {
@@ -123,6 +272,7 @@
     margin-bottom: 0 !important;
     font-size: 16px;
     font-weight: 600;
+    min-height: 24px;
 }
 
 .product__content .price del {
@@ -148,6 +298,18 @@
 .product__add-cart {
     margin-top: 16px !important;
     padding: 0 10px;
+    margin-top: auto !important;
+}
+
+/* Shop card body alignment */
+.product-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.product-body .mt-3:last-child {
+    margin-top: auto !important;
 }
 
 

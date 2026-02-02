@@ -76,9 +76,18 @@
                             <label class="form-label" for="category">Category</label>
                             <select id="category" name="category" class="form-select">
                                 <option value="">Select Category</option>
-                                {% for category in categories %}
-                                    <option value="{{ category.category_key }}" {% if product.category == category.category_key %}selected{% endif %}>{{ category.name }}</option>
-                                {% endfor %}
+                                <option value="TOP_DEALS" {% if product.category == 'TOP_DEALS' %}selected{% endif %}>Top Deals</option>
+                                <option value="TOP_SELLING" {% if product.category == 'TOP_SELLING' %}selected{% endif %}>Top Selling</option>
+                                <option value="TOP_FEATURED" {% if product.category == 'TOP_FEATURED' %}selected{% endif %}>Top Featured</option>
+                                <option value="RECOMMENDED" {% if product.category == 'RECOMMENDED' %}selected{% endif %}>Recommended</option>
+                                <option value="MOBILES" {% if product.category == 'MOBILES' %}selected{% endif %}>Mobiles</option>
+                                <option value="FOOD_HEALTH" {% if product.category == 'FOOD_HEALTH' %}selected{% endif %}>Food & Health</option>
+                                <option value="HOME_KITCHEN" {% if product.category == 'HOME_KITCHEN' %}selected{% endif %}>Home & Kitchen</option>
+                                <option value="AUTO_ACC" {% if product.category == 'AUTO_ACC' %}selected{% endif %}>Auto Acc</option>
+                                <option value="FURNITURE" {% if product.category == 'FURNITURE' %}selected{% endif %}>Furniture</option>
+                                <option value="SPORTS" {% if product.category == 'SPORTS' %}selected{% endif %}>Sports</option>
+                                <option value="GENZ_TRENDS" {% if product.category == 'GENZ_TRENDS' %}selected{% endif %}>GenZ Trends</option>
+                                <option value="NEXT_GEN" {% if product.category == 'NEXT_GEN' %}selected{% endif %}>Next Gen</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -191,185 +200,8 @@
         </div>
     </div>
     
-    <!-- Add Review Section -->
-    <div class="col-xl-8">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Add Product Review (Admin)</h5>
-                <small class="text-muted">Add a review to this product from admin panel</small>
-            </div>
-            <div class="card-body">
-                <div id="addReviewForm">
-                    <div class="mb-3">
-                        <label class="form-label">Rating *</label>
-                        <div class="d-flex gap-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="admin_rating" id="rating5" value="5" />
-                                <label class="form-check-label" for="rating5">⭐ 5 Stars</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="admin_rating" id="rating4" value="4" />
-                                <label class="form-check-label" for="rating4">⭐ 4 Stars</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="admin_rating" id="rating3" value="3" />
-                                <label class="form-check-label" for="rating3">⭐ 3 Stars</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="admin_rating" id="rating2" value="2" />
-                                <label class="form-check-label" for="rating2">⭐ 2 Stars</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="admin_rating" id="rating1" value="1" />
-                                <label class="form-check-label" for="rating1">⭐ 1 Star</label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label" for="admin_name">Reviewer Name *</label>
-                        <input type="text" class="form-control" id="admin_name" placeholder="Enter reviewer name" />
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label" for="admin_email">Email *</label>
-                        <input type="email" class="form-control" id="admin_email" placeholder="Enter email address" />
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label" for="admin_comment">Review Comment (optional)</label>
-                        <textarea class="form-control" id="admin_comment" rows="4" placeholder="Write a review comment..."></textarea>
-                    </div>
-                    
-                    <div class="alert alert-info" role="alert">
-                        <i class='bx bx-info-circle'></i> This review will be automatically approved and visible to customers
-                    </div>
-                    
-                    <button type="button" class="btn btn-success" onclick="submitAdminReview({{ product.id }})">
-                        <i class='bx bx-plus'></i> Add Review
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="resetReviewForm()">Clear</button>
-                </div>
-                
-                <div id="reviewStatus" style="display: none;"></div>
-            </div>
-        </div>
-        
-        <!-- Product Reviews List -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Product Reviews</h5>
-                <small class="text-muted">Total: {{ product.review_count }} reviews | Avg Rating: {{ product.rating }}/5</small>
-            </div>
-            <div class="card-body">
-                <div id="reviewsList">
-                    <p class="text-muted text-center py-4">
-                        <i class='bx bx-loader-alt bx-spin'></i> Loading reviews...
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-    function submitAdminReview(productId) {
-        const rating = document.querySelector('input[name="admin_rating"]:checked');
-        const name = document.getElementById('admin_name').value.trim();
-        const email = document.getElementById('admin_email').value.trim();
-        const comment = document.getElementById('admin_comment').value.trim();
-        
-        // Validate
-        if (!rating) {
-            alert('Please select a rating');
-            return;
-        }
-        if (!name) {
-            alert('Please enter reviewer name');
-            return;
-        }
-        if (!email) {
-            alert('Please enter email address');
-            return;
-        }
-        const form = new FormData();
-        form.append('rating', rating.value);
-        form.append('name', name);
-        form.append('email', email);
-        form.append('comment', comment);
-        form.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-        
-        const statusDiv = document.getElementById('reviewStatus');
-        const formDiv = document.getElementById('addReviewForm');
-        
-        fetch(`/admin-panel/product/${productId}/add-review/`, {
-            method: 'POST',
-            body: form
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                formDiv.style.display = 'none';
-                statusDiv.style.display = 'block';
-                statusDiv.innerHTML = `
-                    <div class="alert alert-success alert-dismissible" role="alert">
-                        <i class='bx bx-check-circle'></i> ${data.message}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                `;
-                
-                // Reset form after 2 seconds
-                setTimeout(() => {
-                    resetReviewForm();
-                    location.reload();
-                }, 2000);
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error adding review');
-        });
-    }
-    
-    function resetReviewForm() {
-        document.querySelectorAll('input[name="admin_rating"]').forEach(r => r.checked = false);
-        document.getElementById('admin_name').value = '';
-        document.getElementById('admin_email').value = '';
-        document.getElementById('admin_comment').value = '';
-        document.getElementById('addReviewForm').style.display = 'block';
-        document.getElementById('reviewStatus').style.display = 'none';
-    }
-    
-    // Load product reviews
-    function loadProductReviews(productId) {
-        fetch(`/product-details/${productId}/`)
-            .then(response => response.text())
-            .then(html => {
-                // Extract reviews from the response
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const reviewsList = document.getElementById('reviewsList');
-                
-                // For now, show a simple message
-                reviewsList.innerHTML = `
-                    <p class="text-muted text-center py-4">
-                        Reviews are displayed on the product detail page
-                    </p>
-                `;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('reviewsList').innerHTML = 
-                    '<p class="text-danger">Error loading reviews</p>';
-            });
-    }
-    
-    // Load reviews on page load
-    window.addEventListener('load', () => {
-        loadProductReviews({{ product.id }});
-    });
-    </script>
+    <!-- Product Info Sidebar -->
+    <div class="col-xl-4">
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">Product Information</h5>

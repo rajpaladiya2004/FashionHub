@@ -209,48 +209,10 @@
                                             {% endif %}
                                         </td>
                                     </tr>
-                                    
-                                    <!-- Loyalty Points Redemption -->
-                                    {% if user.is_authenticated and loyalty_account and loyalty_account.points_available > 0 %}
-                                    <tr class="loyalty-points-row">
-                                        <th colspan="2">
-                                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                                <span>
-                                                    <i class="fas fa-star" style="color: #ffc107;"></i> Loyalty Points Available
-                                                </span>
-                                                <span style="font-weight: 600; color: #ffc107;">{{ loyalty_account.points_available }} Points</span>
-                                            </div>
-                                        </th>
-                                    </tr>
-                                    <tr class="loyalty-redeem-row">
-                                        <th colspan="2">
-                                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                                <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;">
-                                                    <input type="checkbox" name="redeem_points" id="redeem_points" value="1">
-                                                    <span>Use loyalty points for this order</span>
-                                                </label>
-                                                <small style="color: #666; display: block; width: 100%; margin-left: 28px;">
-                                                    ₹1 = 33 points earned | 1 point = ₹0.03 discount | Max discount: ₹{% widthratio loyalty_account.points_available 100 3 %}
-                                                </small>
-                                            </div>
-                                        </th>
-                                    </tr>
-                                    <tr class="points-discount-row" id="points_discount_row" style="display: none;">
-                                        <th>Points Discount</th>
-                                        <td>
-                                            <div style="display: flex; gap: 10px; align-items: center;">
-                                                <span class="amount" id="points_discount_amount">-₹0.00</span>
-                                                <input type="number" name="points_to_redeem" id="points_to_redeem" min="0" max="{{ loyalty_account.points_available }}" value="0" style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" placeholder="Points">
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endif %}
-                                    
                                     <tr class="order-total">
                                         <th>Order Total</th>
-                                        <td><strong><span class="amount" id="final_total_display">&#8377;{{ final_total|floatformat:2 }}</span></strong></td>
+                                        <td><strong><span class="amount">&#8377;{{ final_total|floatformat:2 }}</span></strong></td>
                                     </tr>
-                                
                                 </tfoot>
                             </table>
                         </div>
@@ -336,52 +298,6 @@ document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
         e.stopPropagation();
     });
 });
-
-// ===== Loyalty Points Redemption =====
-{% if user.is_authenticated and loyalty_account and loyalty_account.points_available > 0 %}
-const redeemCheckbox = document.getElementById('redeem_points');
-const pointsToRedeemInput = document.getElementById('points_to_redeem');
-const pointsDiscountRow = document.getElementById('points_discount_row');
-const pointsDiscountAmount = document.getElementById('points_discount_amount');
-const finalTotalDisplay = document.getElementById('final_total_display');
-
-const baseTotal = {{ final_total }};
-const maxPoints = {{ loyalty_account.points_available }};
-
-if (redeemCheckbox) {
-    redeemCheckbox.addEventListener('change', function() {
-        if (this.checked) {
-            pointsDiscountRow.style.display = 'table-row';
-            pointsToRedeemInput.value = Math.min(maxPoints, Math.floor(baseTotal)); // Max discount = total amount
-        } else {
-            pointsDiscountRow.style.display = 'none';
-            pointsToRedeemInput.value = 0;
-            updateTotal(0);
-        }
-    });
-
-    if (pointsToRedeemInput) {
-        pointsToRedeemInput.addEventListener('input', function() {
-            let points = parseInt(this.value) || 0;
-            // Limit points to not exceed order total
-            const maxDiscount = Math.floor(baseTotal);
-            points = Math.min(points, maxPoints);
-            points = Math.min(points, maxDiscount);
-            
-            this.value = points;
-            updateTotal(points);
-        });
-    }
-}
-
-function updateTotal(pointsRedeemed) {
-    const discount = pointsRedeemed * 0.03; // 1 point = ₹0.03
-    const newTotal = baseTotal - discount;
-    
-    pointsDiscountAmount.textContent = `-₹${discount.toFixed(2)}`;
-    finalTotalDisplay.textContent = `₹${newTotal.toFixed(2)}`;
-}
-{% endif %}
 </script>
 
 {% endblock content %}

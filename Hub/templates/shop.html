@@ -1,5 +1,6 @@
 ﻿{% extends "base.html" %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Shop - VibeMall{% endblock %}
 
@@ -20,7 +21,7 @@
     .product-card:hover { transform: translateY(-4px); box-shadow: 0 16px 38px rgba(15, 23, 42, 0.12); }
     .card-media { position: relative; border-radius: 12px; overflow: hidden; background: #f5f7fb; }
     .card-media img { width: 100%; height: 240px; object-fit: cover; display: block; }
-    .discount-badge { position: absolute; bottom: 10px; left: 10px; background: #5aab19; color: #fff; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+    .discount-badge { position: absolute; top: 10px; left: 10px; background: #f97316; color: #fff; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
     .quick-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; }
     .action-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #e5e7eb; background: #fff; color: #0f172a; display: grid; place-items: center; transition: background 120ms ease, color 120ms ease, border-color 120ms ease; }
     .action-btn:hover { background: #0f172a; color: #fff; border-color: #0f172a; }
@@ -45,31 +46,13 @@
     .filter-form input[type="number"]::-webkit-outer-spin-button,
     .filter-form input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .filter-form input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-    
-    /* Fix breadcrumb separator */
-    .breadcrumb-item + .breadcrumb-item::before {
-        content: "/" !important;
-        padding: 0 8px;
-        color: #6c757d;
-    }
-    .breadcrumb-item a {
-        color: #0d6efd;
-        text-decoration: none;
-    }
-    .breadcrumb-item a:hover {
-        color: #0a58ca;
-        text-decoration: underline;
-    }
-    .breadcrumb-item.active {
-        color: #6c757d;
-    }
 </style>
 
 <section class="breadcrumb__area box-plr-75 shop-shell pb-10 pt-20">
     <div class="container">
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}success{% endif %} alert-dismissible fade show mb-3 auto-dismiss-alert" role="alert">
+                <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}success{% endif %} alert-dismissible fade show mb-3" role="alert">
                     <i class="fas fa-info-circle"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
@@ -225,7 +208,7 @@
 
                 <div class="row g-3">
                     {% for product in products %}
-                        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
+                        <div class="col-xl-4 col-lg-4 col-md-6 col-sm-6">
                             <div class="product-card h-100">
                                 <div class="card-media" style="position: relative;">
                                     {% if product.discount_percent %}
@@ -246,8 +229,8 @@
                                             data-product-price="{{ product.price }}"
                                             data-product-old-price="{{ product.old_price|default_if_none:'' }}"
                                             data-product-image="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
-                                            data-product-rating="{{ product.rating }}"
-                                            data-product-reviews="{{ product.review_count }}"
+                                            data-product-rating="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.avg_rating }}{% else %}{{ product.rating }}{% endif %}{% endwith %}"
+                                            data-product-reviews="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %}{% endwith %}"
                                             data-product-link="{% url 'product-details' product.id %}"
                                             data-product-stock="{{ product.stock }}"
                                             onclick="openQuickView(this)">
@@ -284,16 +267,26 @@
                                     </div>
 
                                     <div class="rating-inline d-flex align-items-center gap-2 mt-1">
+                                        {% with stats=product_stats|get_item:product.id %}
                                         <span>
                                             {% for i in "12345" %}
-                                                {% if forloop.counter <= product.rating %}
-                                                    <i class="fas fa-star"></i>
+                                                {% if stats %}
+                                                    {% if forloop.counter <= stats.avg_rating|add:0 %}
+                                                        <i class="fas fa-star"></i>
+                                                    {% else %}
+                                                        <i class="fal fa-star"></i>
+                                                    {% endif %}
                                                 {% else %}
-                                                    <i class="fal fa-star"></i>
+                                                    {% if forloop.counter <= product.rating %}
+                                                        <i class="fas fa-star"></i>
+                                                    {% else %}
+                                                        <i class="fal fa-star"></i>
+                                                    {% endif %}
                                                 {% endif %}
                                             {% endfor %}
                                         </span>
-                                        <span class="text-muted small">({{ product.review_count }} reviews)</span>
+                                        <span class="text-muted small" style="white-space: nowrap;">({% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %} reviews)</span>
+                                        {% endwith %}
                                     </div>
 
                                     <div class="mt-3">
@@ -689,17 +682,6 @@
         }
     `;
     document.head.appendChild(animStyle);
-
-    // Auto-dismiss alerts after 7 seconds
-    document.addEventListener('DOMContentLoaded', function() {
-        const alerts = document.querySelectorAll('.auto-dismiss-alert');
-        alerts.forEach(function(alert) {
-            setTimeout(function() {
-                const bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            }, 7000); // 7 seconds
-        });
-    });
 </script>
 
 {% endblock content %}

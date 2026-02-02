@@ -15,15 +15,15 @@ git push origin main
 ## Step 3: Database Setup Karo
 1. Render Dashboard ma `PostgreSQL` select karo
 2. Create database:
-   - **Name:** fashionhub_db
-   - **User:** fashionhub_user
+   - **Name:** vibemall_db
+   - **User:** vibemall_user
    - Database URL copy karo (DATABASE_URL)
 
 ## Step 4: Web Service Create Karo
 1. **New** > **Web Service**
-2. GitHub repo select karo (`rajpaladiya2004/FashionHub`)
+2. GitHub repo select karo (`rajpaladiya2004/VibeMall`)
 3. **Settings:**
-   - **Name:** fashionhub
+   - **Name:** vibemall
    - **Environment:** Python 3.11
    - **Region:** Singapore (ya closest)
    - **Build Command:** `bash build.sh`

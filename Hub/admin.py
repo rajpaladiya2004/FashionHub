@@ -1,33 +1,7 @@
 # admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import (
-    CategoryIcon,
-    Slider,
-    Feature,
-    Banner,
-    Product,
-    ProductImage,
-    DealCountdown,
-    Cart,
-    Wishlist,
-    ProductReview,
-    ReviewImage,
-    ReviewVote,
-    ProductQuestion,
-    Order,
-    OrderItem,
-    OrderStatusHistory,
-    AdminEmailSettings,
-    ProductStockNotification,
-    BrandPartner,
-    LoyaltyPoints,
-    PointsTransaction,
-    ReturnRequest,
-    WishlistPriceAlert,
-    Notification,
-    EmailLog,
-)
+from .models import CategoryIcon, Slider, Feature, Banner, Product, ProductImage, DealCountdown, Cart, Wishlist, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings
 
 admin.site.register(Slider)
 
@@ -225,14 +199,6 @@ class WishlistAdmin(admin.ModelAdmin):
     readonly_fields = ('added_at',)
 
 
-@admin.register(ProductStockNotification)
-class ProductStockNotificationAdmin(admin.ModelAdmin):
-    list_display = ('product', 'email', 'user', 'is_sent', 'created_at', 'notified_at')
-    list_filter = ('is_sent', 'created_at', 'notified_at', 'product')
-    search_fields = ('email', 'product__name')
-    readonly_fields = ('created_at', 'notified_at')
-
-
 class ReviewImageInline(admin.TabularInline):
     model = ReviewImage
     extra = 1
@@ -307,25 +273,16 @@ class OrderItemInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     """Order Management in Admin Panel"""
-    list_display = ('order_number', 'user_name', 'total_amount', 'approval_status_badge', 'payment_status_badge', 'order_status_badge', 'payment_method', 'risk_indicator', 'is_resell_badge', 'created_at', 'approval_actions')
-    list_filter = ('approval_status', 'is_suspicious', 'order_status', 'payment_status', 'payment_method', 'is_resell', 'created_at')
+    list_display = ('order_number', 'user_name', 'total_amount', 'payment_status_badge', 'order_status_badge', 'payment_method', 'is_resell_badge', 'created_at')
+    list_filter = ('order_status', 'payment_status', 'payment_method', 'is_resell', 'created_at')
     search_fields = ('order_number', 'user__username', 'user__email')
-    readonly_fields = ('order_number', 'created_at', 'updated_at', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'risk_score', 'approved_by', 'approved_at')
+    readonly_fields = ('order_number', 'created_at', 'updated_at', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature')
     date_hierarchy = 'created_at'
     inlines = [OrderItemInline]
-    actions = ['approve_orders', 'reject_orders']
     
     fieldsets = (
         ('📋 ORDER INFO', {
             'fields': ('order_number', 'user', 'created_at', 'updated_at')
-        }),
-        ('✅ APPROVAL STATUS', {
-            'fields': ('approval_status', 'approval_notes', 'approved_by', 'approved_at'),
-            'classes': ('collapse',),
-        }),
-        ('🚨 FRAUD DETECTION', {
-            'fields': ('is_suspicious', 'suspicious_reason', 'risk_score'),
-            'classes': ('collapse',),
         }),
         ('💰 PAYMENT DETAILS', {
             'fields': ('subtotal', 'tax', 'shipping_cost', 'total_amount', 'payment_method', 'payment_status', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature')
@@ -337,7 +294,7 @@ class OrderAdmin(admin.ModelAdmin):
             'fields': ('shipping_address', 'billing_address')
         }),
         ('📝 NOTES', {
-            'fields': ('customer_notes', 'admin_notes')
+            'fields': ('customer_notes',)
         }),
         ('🔄 RESELL', {
             'fields': ('is_resell',)
@@ -347,52 +304,6 @@ class OrderAdmin(admin.ModelAdmin):
     def user_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
     user_name.short_description = 'Customer'
-    
-    def approval_status_badge(self, obj):
-        colors = {
-            'PENDING_APPROVAL': '#ff9800',
-            'APPROVED': '#4caf50',
-            'REJECTED': '#f44336',
-            'AUTO_APPROVED': '#2196f3',
-        }
-        icons = {
-            'PENDING_APPROVAL': '⏳',
-            'APPROVED': '✅',
-            'REJECTED': '❌',
-            'AUTO_APPROVED': '🤖',
-        }
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 3px;">{} {}</span>',
-            colors.get(obj.approval_status, '#999'),
-            icons.get(obj.approval_status, ''),
-            obj.get_approval_status_display()
-        )
-    approval_status_badge.short_description = 'Approval'
-    
-    def risk_indicator(self, obj):
-        if obj.is_suspicious:
-            return format_html(
-                '<span style="background-color: #f44336; color: white; padding: 5px 10px; border-radius: 3px;" title="{}">🚨 Risk: {}%</span>',
-                obj.suspicious_reason,
-                obj.risk_score
-            )
-        elif obj.risk_score > 50:
-            return format_html(
-                '<span style="background-color: #ff9800; color: white; padding: 5px 10px; border-radius: 3px;">⚠️ {}%</span>',
-                obj.risk_score
-            )
-        return format_html('<span style="color: #4caf50;">✓ Safe</span>')
-    risk_indicator.short_description = 'Risk'
-    
-    def approval_actions(self, obj):
-        if obj.approval_status == 'PENDING_APPROVAL':
-            return format_html(
-                '<a class="button" href="/admin-panel/orders/{}/approve/" style="background-color: #4caf50; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none; margin-right: 5px;">✅ Approve</a>'
-                '<a class="button" href="/admin-panel/orders/{}/reject/" style="background-color: #f44336; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none;">❌ Reject</a>',
-                obj.id, obj.id
-            )
-        return '-'
-    approval_actions.short_description = 'Actions'
     
     def payment_status_badge(self, obj):
         colors = {
@@ -404,7 +315,7 @@ class OrderAdmin(admin.ModelAdmin):
         return format_html(
             '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 3px;">{}</span>',
             colors.get(obj.payment_status, '#999'),
-            obj.get_payment_status_display()
+            obj.get_payment_status_color()
         )
     payment_status_badge.short_description = 'Payment Status'
     
@@ -412,8 +323,7 @@ class OrderAdmin(admin.ModelAdmin):
         colors = {
             'PENDING': '#ff9800',
             'PROCESSING': '#2196f3',
-            'PACKED': '#9c27b0',
-            'SHIPPED': '#673ab7',
+            'SHIPPED': '#9c27b0',
             'DELIVERED': '#4caf50',
             'CANCELLED': '#f44336',
         }
@@ -429,29 +339,6 @@ class OrderAdmin(admin.ModelAdmin):
             return format_html('<span style="background-color: #2196f3; color: white; padding: 5px 10px; border-radius: 3px;">🔄 RESELL</span>')
         return '—'
     is_resell_badge.short_description = 'Type'
-    
-    # Admin Actions
-    def approve_orders(self, request, queryset):
-        from django.utils import timezone
-        updated = queryset.filter(approval_status='PENDING_APPROVAL').update(
-            approval_status='APPROVED',
-            approved_by=request.user,
-            approved_at=timezone.now(),
-            order_status='PROCESSING'
-        )
-        self.message_user(request, f'{updated} orders approved successfully.')
-    approve_orders.short_description = "✅ Approve selected orders"
-    
-    def reject_orders(self, request, queryset):
-        from django.utils import timezone
-        updated = queryset.filter(approval_status='PENDING_APPROVAL').update(
-            approval_status='REJECTED',
-            approved_by=request.user,
-            approved_at=timezone.now(),
-            order_status='CANCELLED'
-        )
-        self.message_user(request, f'{updated} orders rejected.')
-    reject_orders.short_description = "❌ Reject selected orders"
 
 
 @admin.register(OrderItem)
@@ -509,119 +396,4 @@ class AdminEmailSettingsAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         # Only allow one admin email setting
-        return not AdminEmailSettings.objects.exists()
-
-
-@admin.register(BrandPartner)
-class BrandPartnerAdmin(admin.ModelAdmin):
-    list_display = ('name', 'logo_preview', 'link_url', 'order', 'is_active')
-    list_editable = ('order', 'is_active')
-    list_filter = ('is_active', 'created_at')
-    search_fields = ('name', 'link_url')
-    readonly_fields = ('logo_preview_large', 'created_at', 'updated_at')
-    
-    fieldsets = (
-        ('📋 BRAND INFO', {
-            'fields': ('name', 'link_url'),
-            'description': 'Brand name and optional website URL'
-        }),
-        ('🖼️ LOGO', {
-            'fields': ('logo', 'logo_preview_large'),
-            'description': 'Upload brand logo (recommended size: 200x80px)'
-        }),
-        ('⚙️ SETTINGS', {
-            'fields': ('order', 'is_active', 'created_at', 'updated_at'),
-            'description': 'Display order and status'
-        }),
-    )
-    
-    def logo_preview(self, obj):
-        if obj.logo:
-            return format_html(
-                '<img src="{}" style="max-width: 80px; height: 40px; object-fit: contain; border-radius: 4px;" />',
-                obj.logo.url
-            )
-        return '—'
-    logo_preview.short_description = 'Logo'
-    
-    def logo_preview_large(self, obj):
-        if obj.logo:
-            return format_html(
-                '<img src="{}" style="max-width: 200px; max-height: 100px; object-fit: contain; border: 1px solid #ddd; padding: 10px; border-radius: 5px; background: #f9f9f9;" />',
-                obj.logo.url
-            )
-        return 'No logo uploaded'
-    logo_preview_large.short_description = 'Logo Preview'
-
-
-# ============================================
-# NEW FEATURES - Admin Registration
-# ============================================
-
-@admin.register(LoyaltyPoints)
-class LoyaltyPointsAdmin(admin.ModelAdmin):
-    list_display = ('user', 'total_points', 'points_used', 'points_available', 'updated_at')
-    list_filter = ('created_at',)
-    search_fields = ('user__username', 'user__email')
-    readonly_fields = ('created_at', 'updated_at')
-
-
-@admin.register(PointsTransaction)
-class PointsTransactionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'points', 'transaction_type', 'description', 'created_at')
-    list_filter = ('transaction_type', 'created_at')
-    search_fields = ('user__username', 'description')
-    readonly_fields = ('created_at',)
-    date_hierarchy = 'created_at'
-
-
-@admin.register(ReturnRequest)
-class ReturnRequestAdmin(admin.ModelAdmin):
-    list_display = ('return_number', 'user', 'order', 'reason', 'status', 'refund_amount', 'created_at')
-    list_filter = ('status', 'reason', 'created_at')
-    search_fields = ('return_number', 'user__username', 'order__order_number')
-    readonly_fields = ('return_number', 'created_at', 'updated_at')
-    
-    fieldsets = (
-        ('Return Information', {
-            'fields': ('return_number', 'order', 'user', 'order_item')
-        }),
-        ('Reason & Details', {
-            'fields': ('reason', 'description', 'images')
-        }),
-        ('Status & Processing', {
-            'fields': ('status', 'admin_notes', 'pickup_date')
-        }),
-        ('Refund Information', {
-            'fields': ('refund_amount', 'refund_method', 'refund_date')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at')
-        }),
-    )
-
-
-@admin.register(WishlistPriceAlert)
-class WishlistPriceAlertAdmin(admin.ModelAdmin):
-    list_display = ('user', 'product', 'original_price', 'target_price', 'is_active', 'notified')
-    list_filter = ('is_active', 'notified', 'created_at')
-    search_fields = ('user__username', 'product__name')
-    readonly_fields = ('created_at', 'updated_at')
-
-
-@admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'notification_type', 'title', 'is_read', 'created_at')
-    list_filter = ('notification_type', 'is_read', 'created_at')
-    search_fields = ('user__username', 'title', 'message')
-    readonly_fields = ('created_at',)
-    date_hierarchy = 'created_at'
-
-
-@admin.register(EmailLog)
-class EmailLogAdmin(admin.ModelAdmin):
-    list_display = ('email_to', 'email_type', 'subject', 'sent_successfully', 'sent_at')
-    list_filter = ('email_type', 'sent_successfully', 'sent_at')
-    search_fields = ('email_to', 'subject', 'user__username')
-    readonly_fields = ('sent_at',)
-    date_hierarchy = 'sent_at'
+        return AdminEmailSettings.objects.count() == 0

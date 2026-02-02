@@ -587,13 +587,11 @@ input {
   border: 1px solid transparent;
   text-transform: uppercase;
   text-align: center;
-  border-radius: 50px;
 }
 .cart-btn:hover {
   border: 1px solid #e5e5e5;
   background-color: #ffffff;
   color: #222;
-  border-radius: 50px;
 }
 
 .cart-btn-3 {
@@ -1201,15 +1199,12 @@ input {
 
 .logo .logo-image img {
   display: block;
-  max-width: 260px;
-  max-height: 70px;
-  width: auto;
-  height: auto;
-  padding: 0;
+  max-width: 210px;
+  padding: 5px 0;
 }
 @media only screen and (min-width: 576px) and (max-width: 767px) {
   .logo .logo-image img {
-    max-width: 220px;
+    max-width: 170px;
   }
 }
 @media (max-width: 575px) {
@@ -1228,7 +1223,7 @@ input {
 }
 
 .heade-mid-inner {
-  padding: 20px 0;
+  padding: 30px 0;
   border-bottom: 1px solid;
   border-color: rgba(255, 255, 255, 0.1);
   position: relative;
@@ -3052,32 +3047,15 @@ input {
 /*----------------------------------------*/
 
 /* Rating stars */
-.rating {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: nowrap;
-}
-
 .rating ul {
     display: flex;
-    gap: 1px;
+    gap: 3px;
     padding: 0;
     margin: 0;
-    flex-wrap: nowrap;
-    white-space: nowrap;
-    min-width: fit-content;
 }
 
 .rating ul li {
     list-style: none;
-    display: inline-flex;
-    align-items: center;
-}
-
-.rating ul li i {
-    font-size: 11px;
-    line-height: 1;
 }
 
 /* ⭐ Yellow active stars */
@@ -3089,12 +3067,6 @@ input {
 
 .rating i.star-inactive {
     color: #ccc !important;
-}
-
-.rating span {
-    font-size: 13px;
-    color: #666;
-    margin-top: 1px;
 }
 
 
@@ -3217,7 +3189,7 @@ input {
 }
 .product__thumb .product__offer {
   position: absolute;
-  bottom: 10px;
+  top: 0px;
   left: 0px;
 }
 .product__thumb .product__offer span {
@@ -3594,7 +3566,7 @@ input {
 }
 .features-thum .product__offer {
   position: absolute;
-  bottom: 10px;
+  top: 0;
   left: 0;
 }
 .features-thum .product__offer span {

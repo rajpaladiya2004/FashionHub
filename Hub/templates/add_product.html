@@ -1,7 +1,7 @@
 ﻿{% extends "base.html" %}
 {% load static %}
 
-{% block title %}Add Product - FashionHub{% endblock %}
+{% block title %}Add Product - VibeMall{% endblock %}
 
 {% block content %}
 <style>
@@ -290,14 +290,6 @@
                                     <option value="TOP_SELLING">Top Selling Products</option>
                                     <option value="TOP_FEATURED">Top Featured Products</option>
                                     <option value="RECOMMENDED">Recommended For You</option>
-                                    <option value="MOBILES">Mobiles</option>
-                                    <option value="FOOD_HEALTH">Food & Health</option>
-                                    <option value="HOME_KITCHEN">Home & Kitchen</option>
-                                    <option value="AUTO_ACC">Auto Acc</option>
-                                    <option value="FURNITURE">Furniture</option>
-                                    <option value="SPORTS">Sports</option>
-                                    <option value="GENZ_TRENDS">GenZ Trends</option>
-                                    <option value="NEXT_GEN">Next Gen</option>
                                 </select>
                                 <div class="field-hint">Choose where to display this product</div>
                             </div>
@@ -476,33 +468,7 @@
             <!-- Recent Products Section -->
             {% if products %}
             <div class="table-section" style="margin-top: 60px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3>📊 Recently Added Products</h3>
-                    
-                    <!-- Category Filter -->
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <label style="font-weight: 600; font-size: 13px; color: #333;">Filter by Category:</label>
-                        <select id="categoryFilter" onchange="filterByCategory()" style="padding: 8px 15px; border: 1px solid #e5e5e5; border-radius: 4px; font-size: 13px; min-width: 200px;">
-                            <option value="">All Categories</option>
-                            {% for cat in category_choices %}
-                            <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>{{ cat.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                
-                <script>
-                function filterByCategory() {
-                    const select = document.getElementById('categoryFilter');
-                    const category = select.value;
-                    if (category) {
-                        window.location.href = '?category=' + category;
-                    } else {
-                        window.location.href = window.location.pathname;
-                    }
-                }
-                </script>
-                
+                <h3>📊 Recently Added Products</h3>
                 <div class="table-responsive">
                     <table class="table">
                         <thead>

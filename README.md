@@ -26,8 +26,8 @@ A modern e-commerce web application built with Django 5.2, featuring product man
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/rajpaladiya2004/FashionHub.git
-cd FashionHub
+git clone https://github.com/rajpaladiya2004/VibeMall.git
+cd VibeMall
 ```
 
 2. Create a virtual environment:

@@ -22,7 +22,6 @@ class BlockedUserMiddleware:
             reverse('logout'),
             '/static/',
             '/media/',
-            '/order/download-invoice/',
         ]
         
         # Check if current path is allowed

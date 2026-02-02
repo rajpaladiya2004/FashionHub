@@ -24,9 +24,6 @@
                                     <i class="fas fa-recycle"></i> Resell Order
                                 </span>
                             {% endif %}
-                            <a href="{% url 'order_tracking' order.order_number %}" class="btn btn-info btn-sm ms-2">
-                                <i class="fas fa-map-marker-alt"></i> Track Order
-                            </a>
                             <a href="{% url 'download_invoice' order.order_number %}" class="btn btn-success btn-sm ms-2">
                                 <i class="fas fa-download"></i> Download Invoice
                             </a>
@@ -129,34 +126,19 @@
                                 {% for item in order_items %}
                                 <tr>
                                     <td>
-                                        <div class="d-flex align-items-center gap-3">
+                                        <div class="d-flex align-items-center">
                                             {% if item.product_image %}
                                             <img src="{{ item.product_image }}" alt="{{ item.product_name }}" 
-                                                 style="width: 70px; height: 70px; object-fit: cover; border-radius: 8px; border: 2px solid #f0f0f0;">
-                                            {% elif item.product and item.product.image %}
-                                            <img src="{{ item.product.image.url }}" alt="{{ item.product_name }}" 
-                                                 style="width: 70px; height: 70px; object-fit: cover; border-radius: 8px; border: 2px solid #f0f0f0;">
-                                            {% else %}
-                                            <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                                <i class="fas fa-box" style="font-size: 30px; color: white;"></i>
-                                            </div>
+                                                 style="width: 60px; height: 60px; object-fit: cover;" class="me-3">
                                             {% endif %}
                                             <div>
-                                                <strong style="font-size: 15px;">{{ item.product_name }}</strong>
-                                                {% if item.product %}
-                                                <br>
-                                                <a href="{% url 'product-details' item.product.id %}" class="btn btn-sm btn-outline-primary mt-1" style="font-size: 11px;">
-                                                    <i class="fas fa-eye"></i> View Product
-                                                </a>
-                                                {% endif %}
+                                                <strong>{{ item.product_name }}</strong>
                                             </div>
                                         </div>
                                     </td>
                                     <td>{{ item.size|default:"N/A" }}</td>
                                     <td>{{ item.color|default:"N/A" }}</td>
-                                    <td>
-                                        <span class="badge bg-primary">{{ item.quantity }}</span>
-                                    </td>
+                                    <td>{{ item.quantity }}</td>
                                     <td>&#8377;{{ item.product_price }}</td>
                                     <td><strong>&#8377;{{ item.subtotal }}</strong></td>
                                 </tr>

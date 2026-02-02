@@ -55,51 +55,6 @@
     <!-- Vendors CSS -->
     <link rel="stylesheet" href="{% static 'admin/assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css' %}" />
 
-    <style>
-      .admin-search-wrapper {
-        position: relative;
-        width: 260px;
-      }
-      .admin-search-results {
-        position: absolute;
-        top: calc(100% + 8px);
-        left: 0;
-        right: 0;
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-        max-height: 320px;
-        overflow-y: auto;
-        z-index: 9999;
-        display: none;
-      }
-      .admin-search-item {
-        padding: 10px 12px;
-        border-bottom: 1px solid #f1f3f5;
-      }
-      .admin-search-item:last-child {
-        border-bottom: none;
-      }
-      .admin-search-item a {
-        color: inherit;
-        text-decoration: none;
-        display: block;
-      }
-      .admin-search-item small {
-        color: #6c757d;
-      }
-      .admin-search-empty {
-        padding: 10px 12px;
-        color: #6c757d;
-      }
-      @media (max-width: 1200px) {
-        .admin-search-wrapper {
-          width: 200px;
-        }
-      }
-    </style>
-
     <!-- Page CSS -->
     {% block extra_css %}{% endblock %}
 
@@ -120,11 +75,6 @@
         <aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme">
           <div class="app-brand demo">
             <a href="/admin-panel/" class="app-brand-link">
-              {% if site_settings and site_settings.admin_logo %}
-              <img src="{{ site_settings.admin_logo.url }}" alt="{{ site_settings.site_name }}" style="max-height: 40px; max-width: 180px;">
-              {% elif site_settings and site_settings.site_logo %}
-              <img src="{{ site_settings.site_logo.url }}" alt="{{ site_settings.site_name }}" style="max-height: 40px; max-width: 180px;">
-              {% else %}
               <span class="app-brand-logo demo">
                 <svg
                   width="25"
@@ -180,8 +130,7 @@
                   </g>
                 </svg>
               </span>
-              <span class="app-brand-text demo menu-text fw-bolder ms-2">{{ site_settings.site_name|default:"VibeMall" }}</span>
-              {% endif %}
+              <span class="app-brand-text demo menu-text fw-bolder ms-2">FashioHub</span>
             </a>
 
             <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto d-block d-xl-none">
@@ -197,6 +146,12 @@
               <a href="/admin-panel/" class="menu-link">
                 <i class="menu-icon tf-icons bx bx-home-circle"></i>
                 <div data-i18n="Dashboard">Dashboard</div>
+              </a>
+            </li>
+            <li class="menu-item">
+              <a href="/admin/new-dashboard/" class="menu-link">
+                <i class="menu-icon tf-icons bx bx-bar-chart-alt-2"></i>
+                <div data-i18n="NewDashboard">NewDashboard</div>
               </a>
             </li>
 
@@ -222,6 +177,11 @@
                     <div data-i18n="Categories">Categories</div>
                   </a>
                 </li>
+                <li class="menu-item">
+                  <a href="/admin-panel/main-page-products/" class="menu-link">
+                    <div data-i18n="Main Page Category">🏠 Main Page Category</div>
+                  </a>
+                </li>
               </ul>
             </li>
 
@@ -233,24 +193,19 @@
               </a>
             </li>
 
+            <li class="menu-item">
+              <a href="/admin-panel/chat/" class="menu-link">
+                <i class="menu-icon tf-icons bx bx-message"></i>
+                <div data-i18n="Chat">Chat</div>
+              </a>
+            </li>
+
             <!-- Invoices -->
             <li class="menu-item">
-              <a href="javascript:void(0);" class="menu-link menu-toggle">
+              <a href="/admin-panel/invoices/" class="menu-link">
                 <i class="menu-icon tf-icons bx bx-file-pdf"></i>
                 <div data-i18n="Invoices">Invoices</div>
               </a>
-              <ul class="menu-sub">
-                <li class="menu-item">
-                  <a href="/admin-panel/invoice-inventory/" class="menu-link">
-                    <div data-i18n="Invoice &amp; Inventory">Invoice &amp; Inventory</div>
-                  </a>
-                </li>
-                <li class="menu-item">
-                  <a href="/admin-panel/invoices/" class="menu-link">
-                    <div data-i18n="Invoice List">Invoice List</div>
-                  </a>
-                </li>
-              </ul>
             </li>
 
             <!-- Customers -->
@@ -276,30 +231,6 @@
                 <div data-i18n="Banners">Banners</div>
               </a>
             </li>
-
-            <!-- Brand Partners -->
-            <li class="menu-item">
-              <a href="/admin-panel/brand-partners/" class="menu-link">
-                <i class="menu-icon tf-icons bx bx-buildings"></i>
-                <div data-i18n="Brand Partners">Brand Partners</div>
-              </a>
-            </li>
-
-            <!-- Site Settings -->
-            <li class="menu-item">
-              <a href="/admin-panel/site-settings/" class="menu-link">
-                <i class="menu-icon tf-icons bx bx-cog"></i>
-                <div data-i18n="Site Settings">Site Settings</div>
-              </a>
-            </li>
-
-            <!-- Public site shortcut -->
-            <li class="menu-item">
-              <a href="/" class="menu-link" target="_blank" rel="noopener">
-                <i class="menu-icon tf-icons bx bx-globe"></i>
-                <div data-i18n="Go To Website">Go To Website</div>
-              </a>
-            </li>
           </ul>
         </aside>
         <!-- / Menu -->
@@ -323,17 +254,12 @@
               <div class="navbar-nav align-items-center">
                 <div class="nav-item d-flex align-items-center">
                   <i class="bx bx-search fs-4 lh-0"></i>
-                  <div class="admin-search-wrapper">
-                    <input
-                      type="text"
-                      id="adminOrderSearchInput"
-                      class="form-control border-0 shadow-none"
-                      placeholder="Search Order ID"
-                      aria-label="Search Order ID"
-                      autocomplete="off"
-                    />
-                    <div id="adminOrderSearchResults" class="admin-search-results"></div>
-                  </div>
+                  <input
+                    type="text"
+                    class="form-control border-0 shadow-none"
+                    placeholder="Search..."
+                    aria-label="Search..."
+                  />
                 </div>
               </div>
               <!-- /Search -->
@@ -356,11 +282,7 @@
                 <li class="nav-item navbar-dropdown dropdown-user dropdown">
                   <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown">
                     <div class="avatar avatar-online">
-                      {% if user.is_authenticated and user.userprofile.profile_image %}
-                      <img src="{{ user.userprofile.profile_image.url }}" alt="{{ user.username }}" class="w-px-40 h-auto rounded-circle" />
-                      {% else %}
-                      <img src="{% static 'admin/assets/img/avatars/1.png' %}" alt="Admin" class="w-px-40 h-auto rounded-circle" />
-                      {% endif %}
+                      <img src="{% static 'admin/assets/img/avatars/1.png' %}" alt class="w-px-40 h-auto rounded-circle" />
                     </div>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end">
@@ -369,24 +291,12 @@
                         <div class="d-flex">
                           <div class="flex-shrink-0 me-3">
                             <div class="avatar avatar-online">
-                              {% if user.is_authenticated and user.userprofile.profile_image %}
-                              <img src="{{ user.userprofile.profile_image.url }}" alt="{{ user.username }}" class="w-px-40 h-auto rounded-circle" />
-                              {% else %}
-                              <img src="{% static 'admin/assets/img/avatars/1.png' %}" alt="Admin" class="w-px-40 h-auto rounded-circle" />
-                              {% endif %}
+                              <img src="{% static 'admin/assets/img/avatars/1.png' %}" alt class="w-px-40 h-auto rounded-circle" />
                             </div>
                           </div>
                           <div class="flex-grow-1">
-                            <span class="fw-semibold d-block">{{ user.get_full_name|default:user.username }}</span>
-                            <small class="text-muted">
-                              {% if user.is_superuser %}
-                                Super Admin
-                              {% elif user.is_staff %}
-                                Admin
-                              {% else %}
-                                User
-                              {% endif %}
-                            </small>
+                            <span class="fw-semibold d-block">John Doe</span>
+                            <small class="text-muted">Admin</small>
                           </div>
                         </div>
                       </a>
@@ -438,52 +348,6 @@
             <!-- Content -->
 
             <div class="container-xxl flex-grow-1 container-p-y">
-              <!-- Django Messages -->
-              {% if messages %}
-              <div class="messages-container" style="position: fixed; top: 80px; right: 20px; z-index: 9999; max-width: 500px;">
-                {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show auto-dismiss-alert" role="alert" style="margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideInRight 0.3s ease-out;">
-                  {% if 'success' in message.tags %}
-                    <i class='bx bx-check-circle me-2'></i>
-                  {% elif 'error' in message.tags or 'danger' in message.tags %}
-                    <i class='bx bx-error-circle me-2'></i>
-                  {% elif 'warning' in message.tags %}
-                    <i class='bx bx-error me-2'></i>
-                  {% else %}
-                    <i class='bx bx-info-circle me-2'></i>
-                  {% endif %}
-                  {{ message }}
-                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-                {% endfor %}
-              </div>
-              <style>
-                @keyframes slideInRight {
-                  from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                  }
-                  to {
-                    transform: translateX(0);
-                    opacity: 1;
-                  }
-                }
-                @keyframes slideOutRight {
-                  from {
-                    transform: translateX(0);
-                    opacity: 1;
-                  }
-                  to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                  }
-                }
-                .alert-dismissing {
-                  animation: slideOutRight 0.3s ease-in forwards;
-                }
-              </style>
-              {% endif %}
-              
               {% block content %}{% endblock %}
               
             </div>
@@ -558,94 +422,6 @@
     <!-- Main JS -->
     <script src="{% static 'admin/assets/js/main.js' %}"></script>
 
-    <!-- Auto-dismiss alerts after 7 seconds -->
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        // Get all auto-dismiss alerts
-        const alerts = document.querySelectorAll('.auto-dismiss-alert');
-        
-        alerts.forEach(function(alert) {
-          // Auto-dismiss after 7 seconds
-          setTimeout(function() {
-            // Add dismissing animation class
-            alert.classList.add('alert-dismissing');
-            
-            // Remove the alert after animation completes
-            setTimeout(function() {
-              // Use Bootstrap's built-in close method
-              const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
-              bsAlert.close();
-            }, 300); // Wait for animation to complete
-          }, 7000); // 7 seconds
-        });
-      });
-    </script>
-
-    <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        const searchInput = document.getElementById('adminOrderSearchInput');
-        const resultsBox = document.getElementById('adminOrderSearchResults');
-        if (!searchInput || !resultsBox) return;
-
-        let debounceTimer;
-
-        const closeResults = () => {
-          resultsBox.style.display = 'none';
-          resultsBox.innerHTML = '';
-        };
-
-        const renderResults = (items) => {
-          if (!items.length) {
-            resultsBox.innerHTML = '<div class="admin-search-empty">No orders found.</div>';
-            resultsBox.style.display = 'block';
-            return;
-          }
-
-          resultsBox.innerHTML = items.map(item => {
-            return `
-              <div class="admin-search-item">
-                <a href="${item.detail_url}">
-                  <div class="d-flex justify-content-between">
-                    <strong>#${item.order_number}</strong>
-                    <span class="badge bg-light text-dark">${item.order_status}</span>
-                  </div>
-                  <small>${item.customer} • ₹${Number(item.total_amount).toFixed(2)}</small><br />
-                  <small>${item.created_at} • ${item.payment_status}</small>
-                </a>
-              </div>
-            `;
-          }).join('');
-          resultsBox.style.display = 'block';
-        };
-
-        searchInput.addEventListener('input', function () {
-          const query = searchInput.value.trim();
-          clearTimeout(debounceTimer);
-
-          if (!query) {
-            closeResults();
-            return;
-          }
-
-          debounceTimer = setTimeout(() => {
-            fetch(`/admin-panel/api/orders/search/?q=${encodeURIComponent(query)}`)
-              .then(response => response.json())
-              .then(data => renderResults(data.results || []))
-              .catch(() => {
-                resultsBox.innerHTML = '<div class="admin-search-empty">Unable to search right now.</div>';
-                resultsBox.style.display = 'block';
-              });
-          }, 300);
-        });
-
-        document.addEventListener('click', function (event) {
-          if (!resultsBox.contains(event.target) && event.target !== searchInput) {
-            closeResults();
-          }
-        });
-      });
-    </script>
-
     <!-- Page JS -->
     {% block extra_js %}{% endblock %}
 
@@ -653,3 +429,4 @@
     <script async defer src="https://buttons.github.io/buttons.js"></script>
   </body>
 </html>
+S

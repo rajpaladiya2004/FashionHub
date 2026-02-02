@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: fashionhub
+    name: vibemall
     env: python
     region: singapore
     plan: free

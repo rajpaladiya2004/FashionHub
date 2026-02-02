@@ -1,27 +1,39 @@
-﻿{% load static %}
-<header class="header d-blue-bg">
-    
+﻿{% load static %}<header class="header d-blue-bg">
     <div class="header-top">
         <div class="container">
             <div class="header-inner">
                 <div class="row align-items-center">
                     <div class="col-xl-6 col-lg-7">
-                       
+                        <div class="main-menu">
+                            <nav>
+                                <ul>
+                                    <li>
+                                        <a href="{% url 'index' %}" class="active">Home </a>
+                                    </li>
+                                    <li><a href="{% url 'about' %}">About Us</a></li>
+                                    <li><a href="{% url 'shop' %}">Shop</a></li>
+                                    <li><a href="{% url 'blog' %}">Blog</a></li>
+                                    <li><a href="{% url 'contact' %}">Contact</a></li>
+                                </ul>
+                            </nav>
+                        </div>
                     </div>
                     <div class="col-xl-6 col-lg-5 d-none d-lg-block">
                         <div class="header-inner-end text-md-end">
                             <div class="ovic-menu-wrapper">
                                 <ul>
                                     <li><a href="{% url 'about' %}">About Us</a></li>
-                                    <li><a href="{% url 'contact' %}">Order Tracking</a></li>
+                                    {% if user.is_authenticated %}
+                                        <li><a href="{% url 'order_list' %}">My Orders</a></li>
+                                        <li><a href="{% url 'profile' %}">My Account</a></li>
+                                        <li><a href="{% url 'logout' %}">Logout</a></li>
+                                    {% else %}
+                                        <li><a href="{% url 'contact' %}">Order Tracking</a></li>
+                                        <li><a href="{% url 'login' %}">Login</a></li>
+                                    {% endif %}
                                     <li><a href="{% url 'contact' %}">Contact Us</a></li>
                                     <li><a href="{% url 'faq' %}">FAQs</a></li>
-                                    {% if user.is_authenticated %}
-                                        <li><a href="{% url 'logout' %}">Logout</a></li>
-                                        {% endif %}
-
                                 </ul>
-
                             </div>
                         </div>
                     </div>
@@ -35,13 +47,9 @@
                 <div class="row align-items-center">
                     <div class="col-xl-3 col-lg-3 col-md-4 col-sm-4">
                         <div class="header__info">
-                            <a href="{% url 'index' %}" class="logo" style="display: inline-block !important; text-decoration: none !important;">
-                                {% if site_settings and site_settings.site_logo %}
-                                    <img src="{{ site_settings.site_logo.url }}" alt="{{ site_settings.site_name }}" style="height: 60px !important; width: auto !important; max-width: 280px !important; object-fit: contain !important; display: block !important; margin: 0 !important; padding: 0 !important;">
-                                {% else %}
-                                    <h1 style="color: white !important; margin: 0 !important; font-size: 32px !important; font-weight: 700 !important;">{{ site_settings.site_name|default:"VibeMall" }}</h1>
-                                {% endif %}
-                            </a>
+                            <div class="logo">
+                                <a href="{% url 'index' %}" class="logo-image"><h1 style="color: white;">VibeMall</h1></a>
+                            </div>
                         </div>
                     </div>
                     <div class="col-xl-5 col-lg-4 d-none d-lg-block">
@@ -71,18 +79,22 @@
                         </div>
                     </div>
                     <div class="col-xl-4 col-lg-5 col-md-8 col-sm-8">
-                        <div class="header-action" style="display: flex; gap: 20px; justify-content: flex-end; align-items: center;">
+                        <div class="header-action">
                     <div class="block-userlink">
                             {% if user.is_authenticated %}
-                                <a class="icon-link" href="{% url 'profile' %}" style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="flaticon-user"></i>
+                                <a class="icon-link" href="{% url 'profile' %}">
+                                    {% if user.userprofile.profile_image and 'default.png' not in user.userprofile.profile_image.url %}
+                                        <img src="{{ user.userprofile.profile_image.url }}" alt="{{ user.username }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                                    {% else %}
+                                        <i class="flaticon-user"></i>
+                                    {% endif %}
                                     <span class="text">
                                         <span class="sub">{{ user.username }}</span>
                                         My Account
                                     </span>
                                 </a>
                             {% else %}
-                                <a class="icon-link" href="{% url 'login' %}" style="display: flex; align-items: center; gap: 8px;">
+                                <a class="icon-link" href="{% url 'login' %}">
                                     <i class="flaticon-user"></i>
                                     <span class="text">
                                         <span class="sub">Login</span>
@@ -93,7 +105,7 @@
                     </div>
 
                             <div class="block-wishlist action">
-                                <a class="icon-link" href="{% url 'wishlist' %}" style="display: flex; align-items: center; gap: 8px;">
+                                <a class="icon-link" href="{% url 'wishlist' %}">
                                 <i class="flaticon-heart"></i>
                                 <span class="count wishlist-count">{{ wishlist_count|default:"0" }}</span>
                                 <span class="text">
@@ -102,7 +114,7 @@
                                 </a>
                             </div>
                             <div class="block-cart action">
-                                <a class="icon-link" href="{% url 'cart' %}" style="display: flex; align-items: center; gap: 8px;">
+                                <a class="icon-link" href="{% url 'cart' %}">
                                 <i class="flaticon-shopping-bag"></i>
                                 <span class="count">{{ cart_count }}</span>
                                 <span class="text">
@@ -369,7 +381,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-9 col-md-6 col-3">
+                <div class="col-lg-6 col-md-6 col-3">
                     <div class="header__bottom-left d-flex d-xl-block align-items-center">
                         <div class="side-menu d-lg-none mr-20">
                             <button type="button" class="side-menu-btn offcanvas-toggle-btn"><i class="fas fa-bars"></i></button>
@@ -461,18 +473,18 @@
                                             <li><a href="{% url 'blog-details' %}">Blog Details</a></li>
                                         </ul>
                                     </li>
-                                    <li><a href="{% url 'order_list' %}">My Orders</a></li>
                                     <li>
                                         <a href="{% url 'about' %}">Pages <i class="far fa-angle-down"></i></a>
                                         <ul class="submenu">
-                                            <li><a href="{% url 'profile' %}">My Account</a></li>
-                                            <li><a href="{% url 'product-details' %}">Product Details</a></li>
-                                            <li><a href="{% url 'faq' %}">FAQs pages</a></li>
-                                            <li><a href="{% url 'cart' %}">Cart</a></li>
-                                            <li><a href="{% url 'wishlist' %}">Wishlist</a></li>
-                                            <li><a href="{% url 'checkout' %}">Checkout</a></li>
-                                            <li><a href="{% url 'contact' %}">Contact Us</a></li>
-                                            <li><a href="{% url '404' %}">404 Error</a></li>
+                                            <li><a href="{% url 'profile' %}"><i class="fal fa-user"></i> My Account</a></li>
+                                            <li><a href="{% url 'order_list' %}"><i class="fal fa-shopping-bag"></i> My Orders</a></li>
+                                            <li><a href="{% url 'wishlist' %}"><i class="fal fa-heart"></i> Wishlist</a></li>
+                                            <li><a href="{% url 'cart' %}"><i class="fal fa-shopping-cart"></i> Cart</a></li>
+                                            <li><a href="{% url 'checkout' %}"><i class="fal fa-credit-card"></i> Checkout</a></li>
+                                            <li><a href="{% url 'product-details' %}"><i class="fal fa-box"></i> Product Details</a></li>
+                                            <li><a href="{% url 'faq' %}"><i class="fal fa-question-circle"></i> FAQs</a></li>
+                                            <li><a href="{% url 'contact' %}"><i class="fal fa-envelope"></i> Contact Us</a></li>
+                                            <li><a href="{% url '404' %}"><i class="fal fa-exclamation-triangle"></i> 404 Error</a></li>
                                         </ul>
                                     </li>
                                     {% if user.is_staff %}
@@ -493,7 +505,7 @@
                 </div>
                 <div class="col-lg-3 col-md-6 col-9">
                     <div class="shopeing-text text-sm-end">
-                        <p>&nbsp;</p>
+                        <p>Spend &#8377;1200 more and get free shipping!</p>
                     </div>
                 </div>
             </div>

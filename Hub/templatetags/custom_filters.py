@@ -10,3 +10,10 @@ def add_days(date, days):
         return date + timedelta(days=int(days))
     except:
         return date
+
+@register.filter
+def get_item(dictionary, key):
+    """Get item from dictionary"""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key)
+    return None

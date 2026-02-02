@@ -34,7 +34,9 @@
 	////////////////////////////////////////////////////
 	//01. PreLoader Js
 	windowOn.on('load',function() {
-		$("#loading").fadeOut(500);
+		$("#loading").addClass('hidden').fadeOut(500, function() {
+			$(this).remove(); // Completely remove from DOM
+		});
 	});
 
 	////////////////////////////////////////////////////

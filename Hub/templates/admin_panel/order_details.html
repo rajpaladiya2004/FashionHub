@@ -34,11 +34,6 @@
                             <div class="d-flex gap-2">
                                 <span class="badge bg-{{ order.get_payment_status_color }} fs-6">{{ order.get_payment_status_display }}</span>
                                 <a href="#" data-bs-toggle="modal" data-bs-target="#updatePaymentModal" class="btn btn-sm btn-outline-primary">Change</a>
-                                {% if order.order_status == 'DELIVERED' and order.payment_status != 'PAID' %}
-                                <button type="button" class="btn btn-sm btn-outline-success" onclick="autoFixPaymentStatus()">
-                                    <i class='bx bx-check'></i> Auto Fix
-                                </button>
-                                {% endif %}
                                 {% if order.payment_status == 'PAID' and order.razorpay_payment_id %}
                                 <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#refundModal">
                                     <i class='bx bx-money'></i> Refund
@@ -317,22 +312,4 @@
         </div>
     </div>
 </div>
-
-<script>
-function autoFixPaymentStatus() {
-    if (!confirm('Update payment status to PAID?')) {
-        return;
-    }
-    
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.innerHTML = `
-        {% csrf_token %}
-        <input type="hidden" name="action" value="update_payment">
-        <input type="hidden" name="payment_status" value="PAID">
-    `;
-    document.body.appendChild(form);
-    form.submit();
-}
-</script>
 {% endblock %}

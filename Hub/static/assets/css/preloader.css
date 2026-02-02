@@ -6,6 +6,13 @@
 	z-index: 9999999999;
 	margin-top: 0px;
 	top: 0px;
+	display: block;
+}
+
+#loading.hidden {
+	display: none !important;
+	visibility: hidden !important;
+	opacity: 0 !important;
 }
 #loading-center{
 	width: 100%;

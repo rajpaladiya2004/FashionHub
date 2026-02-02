@@ -1,6 +1,6 @@
 /* ===================================
-   CUSTOM JAVASCRIPT FOR FASHIONHUB
-   =================================== */
+    CUSTOM JAVASCRIPT FOR VIBEMALL
+    =================================== */
 
 (function($) {
     'use strict';

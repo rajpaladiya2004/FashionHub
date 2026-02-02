@@ -5,21 +5,17 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.cache import never_cache
-from django.db.models import Count, Q, Avg, Sum, F, DecimalField, ExpressionWrapper
+from django.db.models import Count, Q, Avg, Sum
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.conf import settings
-from django.urls import reverse
-from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
 from decimal import Decimal
 from urllib.parse import urlencode
-import logging
 
-from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction
-from .email_utils import send_order_confirmation_email, send_order_status_update_email, send_admin_order_notification
+from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, MainPageProduct, ChatThread, ChatMessage, ChatAttachment
 
 # ===== ADMIN PANEL VIEWS =====
 
@@ -28,12 +24,6 @@ from .email_utils import send_order_confirmation_email, send_order_status_update
 def admin_test(request):
     """Admin Test Page"""
     return render(request, 'admin_panel/test.html')
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_widgets(request):
-    """Admin Widgets Page"""
-    return render(request, 'admin_panel/widgets.html')
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
@@ -346,6 +336,434 @@ def admin_dashboard(request):
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_new_dashboard(request):
+    """New admin analytics dashboard (read-only)"""
+    from datetime import timedelta
+    from django.db.models.functions import TruncDate
+    import json
+
+    today = timezone.localdate()
+    range_key = request.GET.get('range', 'this_week')
+    range_key = range_key if range_key in {'today', 'yesterday', 'this_week', 'last_week', 'this_month', 'this_year'} else 'this_week'
+
+    if range_key == 'today':
+        start_date = today
+        end_date = today
+        range_label = 'Today'
+    elif range_key == 'yesterday':
+        start_date = today - timedelta(days=1)
+        end_date = start_date
+        range_label = 'Yesterday'
+    elif range_key == 'last_week':
+        start_date = today - timedelta(days=13)
+        end_date = today - timedelta(days=7)
+        range_label = 'Last Week'
+    elif range_key == 'this_month':
+        start_date = today.replace(day=1)
+        end_date = today
+        range_label = 'This Month'
+    elif range_key == 'this_year':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+        range_label = 'This Year'
+    else:
+        start_date = today - timedelta(days=6)
+        end_date = today
+        range_label = 'This Week'
+
+    profit_margin = Decimal('0.30')
+    paid_orders = Order.objects.filter(payment_status='PAID')
+
+    revenue_qs = paid_orders.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+    revenue_by_day = revenue_qs.annotate(day=TruncDate('created_at')).values('day').annotate(total=Sum('total_amount'))
+    orders_by_day = Order.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date).annotate(day=TruncDate('created_at')).values('day').annotate(total=Count('id'))
+    transactions_by_day = revenue_qs.annotate(day=TruncDate('created_at')).values('day').annotate(total=Count('id'))
+    visitors_by_day = User.objects.filter(date_joined__date__gte=start_date, date_joined__date__lte=end_date).annotate(day=TruncDate('date_joined')).values('day').annotate(total=Count('id'))
+    customers_by_day = Order.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date).annotate(day=TruncDate('created_at')).values('day').annotate(total=Count('user', distinct=True))
+
+    revenue_map = {item['day']: item['total'] or Decimal('0') for item in revenue_by_day}
+    orders_map = {item['day']: item['total'] or 0 for item in orders_by_day}
+    transactions_map = {item['day']: item['total'] or 0 for item in transactions_by_day}
+    visitors_map = {item['day']: item['total'] or 0 for item in visitors_by_day}
+    customers_map = {item['day']: item['total'] or 0 for item in customers_by_day}
+
+    labels = []
+    revenue_series = []
+    orders_series = []
+    profit_series = []
+    expense_series = []
+    visitors_series = []
+    customers_series = []
+    transactions_series = []
+
+    day_count = (end_date - start_date).days + 1
+    for i in range(day_count):
+        day = start_date + timedelta(days=i)
+        labels.append(day.strftime('%b %d'))
+        day_revenue = revenue_map.get(day, Decimal('0'))
+        revenue_series.append(float(day_revenue))
+        orders_series.append(int(orders_map.get(day, 0)))
+        profit_value = day_revenue * profit_margin
+        profit_series.append(float(profit_value))
+        expense_series.append(float(day_revenue - profit_value))
+        visitors_series.append(int(visitors_map.get(day, 0)))
+        customers_series.append(int(customers_map.get(day, 0)))
+        transactions_series.append(int(transactions_map.get(day, 0)))
+
+    total_revenue = sum(revenue_series)
+    total_profit = sum(profit_series)
+    total_expenses = sum(expense_series)
+    total_orders = sum(orders_series)
+    total_visitors = sum(visitors_series)
+    total_customers = Order.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date).values('user').distinct().count()
+    total_transactions = sum(transactions_series)
+
+    cards = [
+        {'key': 'orders', 'title': 'Orders', 'value': total_orders, 'is_money': False, 'series': json.dumps(orders_series), 'color': '#2563eb', 'chart_id': 'ordersChart'},
+        {'key': 'expenses', 'title': 'Expenses', 'value': total_expenses, 'is_money': True, 'series': json.dumps(expense_series), 'color': '#dc2626', 'chart_id': 'expensesChart'},
+        {'key': 'profit', 'title': 'Profit', 'value': total_profit, 'is_money': True, 'series': json.dumps(profit_series), 'color': '#16a34a', 'chart_id': 'profitChart'},
+        {'key': 'sales', 'title': 'Sales', 'value': total_revenue, 'is_money': True, 'series': json.dumps(revenue_series), 'color': '#0ea5e9', 'chart_id': 'salesChart'},
+        {'key': 'visitors', 'title': 'Visitors', 'value': total_visitors, 'is_money': False, 'series': json.dumps(visitors_series), 'color': '#8b5cf6', 'chart_id': 'visitorsChart'},
+        {'key': 'customers', 'title': 'Customers', 'value': total_customers, 'is_money': False, 'series': json.dumps(customers_series), 'color': '#f59e0b', 'chart_id': 'customersChart'},
+        {'key': 'transactions', 'title': 'Transactions', 'value': total_transactions, 'is_money': False, 'series': json.dumps(transactions_series), 'color': '#14b8a6', 'chart_id': 'transactionsChart'},
+    ]
+
+    excluded_categories = {'TOP_DEALS', 'TOP_SELLING', 'TOP_FEATURED', 'RECOMMENDED'}
+    category_rows = (
+        OrderItem.objects.filter(
+            order__created_at__date__gte=start_date,
+            order__created_at__date__lte=end_date
+        )
+        .values('product__category')
+        .annotate(total=Sum('quantity'))
+    )
+    category_totals_map = {row['product__category']: int(row['total'] or 0) for row in category_rows}
+
+    category_colors = [
+        '#60a5fa',
+        '#f59e0b',
+        '#fb7185',
+        '#22c55e',
+        '#a78bfa',
+        '#38bdf8',
+        '#f97316',
+        '#84cc16',
+        '#c084fc',
+        '#f472b6',
+        '#2dd4bf',
+        '#94a3b8',
+    ]
+
+    category_labels = []
+    category_counts = []
+    category_list = []
+    icon_categories = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
+
+    for idx, icon in enumerate(icon_categories):
+        category_key = icon.category_key
+        if category_key in excluded_categories:
+            continue
+        total = category_totals_map.get(category_key, 0)
+        color = category_colors[idx % len(category_colors)]
+        category_labels.append(icon.name)
+        category_counts.append(total)
+        category_list.append({'label': icon.name, 'total': total, 'color': color})
+
+    icon_keys = {icon.category_key for icon in icon_categories}
+    other_total = 0
+    for category_key, total in category_totals_map.items():
+        if category_key in icon_keys or category_key in excluded_categories:
+            continue
+        other_total += total
+    if other_total:
+        color = category_colors[len(category_labels) % len(category_colors)]
+        category_labels.append('Other')
+        category_counts.append(other_total)
+        category_list.append({'label': 'Other', 'total': other_total, 'color': color})
+
+    context = {
+        'range_key': range_key,
+        'range_label': range_label,
+        'chart_labels': json.dumps(labels),
+        'cards': cards,
+        'category_labels': json.dumps(category_labels),
+        'category_counts': json.dumps(category_counts),
+        'category_list': category_list,
+        'category_colors': json.dumps(category_colors[:len(category_labels)]),
+    }
+
+    return render(request, 'admin_panel/new_dashboard.html', context)
+
+
+def _ensure_session_key(request):
+    if not request.session.session_key:
+        request.session.save()
+
+
+def _get_admin_chat_email():
+    admin_settings = AdminEmailSettings.objects.filter(is_active=True).first()
+    return admin_settings.admin_email if admin_settings else 'info.vibemall@gmail.com'
+
+
+def _get_thread_for_request(request, thread_id=None):
+    thread = None
+    if thread_id:
+        try:
+            thread = ChatThread.objects.get(id=thread_id)
+        except ChatThread.DoesNotExist:
+            thread = None
+
+        if thread:
+            if request.user.is_authenticated:
+                if thread.user_id != request.user.id:
+                    thread = None
+            else:
+                _ensure_session_key(request)
+                if thread.session_key != request.session.session_key:
+                    thread = None
+
+    if not thread:
+        if request.user.is_authenticated:
+            thread = ChatThread.objects.filter(user=request.user, status='OPEN').order_by('-last_message_at', '-created_at').first()
+        else:
+            _ensure_session_key(request)
+            thread = ChatThread.objects.filter(session_key=request.session.session_key, status='OPEN').order_by('-last_message_at', '-created_at').first()
+
+    if not thread:
+        thread = ChatThread.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            session_key=request.session.session_key if not request.user.is_authenticated else ''
+        )
+
+    return thread
+
+
+def _send_admin_chat_email(thread, message_text):
+    admin_email = _get_admin_chat_email()
+    if not admin_email:
+        return
+
+    subject = f"New chat message - {thread.display_name()}"
+    html_content = render_to_string('emails/chat_admin_notify.html', {
+        'thread': thread,
+        'message': message_text,
+    })
+    text_content = f"""New customer message
+
+From: {thread.display_name()}
+Email: {thread.user.email if thread.user else thread.guest_email}
+
+Message:
+{message_text}
+"""
+
+    email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [admin_email])
+    email.attach_alternative(html_content, "text/html")
+    email.send(fail_silently=True)
+
+
+def _send_user_chat_email(thread, message_text):
+    recipient = None
+    if thread.user and thread.user.email:
+        recipient = thread.user.email
+    elif thread.guest_email:
+        recipient = thread.guest_email
+
+    if not recipient:
+        return
+
+    subject = "Support reply from VibeMall"
+    html_content = render_to_string('emails/chat_user_reply.html', {
+        'thread': thread,
+        'message': message_text,
+    })
+    text_content = f"""Support reply
+
+Hello {thread.display_name()},
+
+{message_text}
+"""
+
+    email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [recipient])
+    email.attach_alternative(html_content, "text/html")
+    email.send(fail_silently=True)
+
+
+def _validate_chat_attachments(files):
+    allowed_ext = {'.jpg', '.jpeg', '.png', '.webp', '.mp4', '.pdf', '.doc', '.docx'}
+    allowed_types = {
+        'image/jpeg', 'image/png', 'image/webp',
+        'video/mp4',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+    max_size = 25 * 1024 * 1024
+
+    for f in files:
+        if f.size > max_size:
+            return f"File {f.name} exceeds 25 MB."
+        name_lower = (f.name or '').lower()
+        if not any(name_lower.endswith(ext) for ext in allowed_ext):
+            return f"File type not allowed: {f.name}."
+        if f.content_type and f.content_type not in allowed_types:
+            return f"File type not allowed: {f.name}."
+    return None
+
+
+def chat_thread(request):
+    thread_id = request.GET.get('thread_id')
+    thread = _get_thread_for_request(request, thread_id)
+
+    messages_qs = thread.messages.prefetch_related('attachments').order_by('created_at')[:50]
+    messages_data = [
+        {
+            'sender': msg.sender_type,
+            'message': msg.message,
+            'attachments': [
+                {
+                    'name': att.original_name,
+                    'url': att.file.url,
+                    'content_type': att.content_type,
+                    'is_image': (att.content_type or '').startswith('image/')
+                }
+                for att in msg.attachments.all()
+            ],
+            'created_at': msg.created_at.strftime('%d %b %H:%M')
+        }
+        for msg in messages_qs
+    ]
+
+    requires_profile = False
+    if not request.user.is_authenticated:
+        requires_profile = not (thread.guest_name and thread.guest_email)
+
+    return JsonResponse({
+        'thread_id': thread.id,
+        'messages': messages_data,
+        'requires_profile': requires_profile,
+        'guest_name': thread.guest_name,
+        'guest_email': thread.guest_email,
+    })
+
+
+@require_POST
+def chat_message(request):
+    message_text = (request.POST.get('message') or '').strip()
+    files = request.FILES.getlist('attachments')
+    if not message_text and not files:
+        return JsonResponse({'error': 'Message or attachment is required.'}, status=400)
+
+    error = _validate_chat_attachments(files)
+    if error:
+        return JsonResponse({'error': error}, status=400)
+
+    thread_id = request.POST.get('thread_id')
+    thread = _get_thread_for_request(request, thread_id)
+
+    if not request.user.is_authenticated:
+        guest_name = (request.POST.get('guest_name') or '').strip()
+        guest_email = (request.POST.get('guest_email') or '').strip()
+
+        if not (thread.guest_name and thread.guest_email):
+            if not guest_name or not guest_email:
+                return JsonResponse({'error': 'Name and email are required.'}, status=400)
+
+        if guest_name and not thread.guest_name:
+            thread.guest_name = guest_name
+        if guest_email and not thread.guest_email:
+            thread.guest_email = guest_email
+
+    message = ChatMessage.objects.create(
+        thread=thread,
+        sender_type='USER',
+        message=message_text
+    )
+    for f in files:
+        ChatAttachment.objects.create(
+            message=message,
+            file=f,
+            original_name=f.name,
+            content_type=f.content_type or '',
+            size_bytes=f.size
+        )
+    thread.last_message_at = timezone.now()
+    thread.save(update_fields=['last_message_at', 'guest_name', 'guest_email'])
+
+    notify_text = message_text or "Sent attachment(s)."
+    _send_admin_chat_email(thread, notify_text)
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': {
+            'sender': message.sender_type,
+            'message': message.message,
+            'attachments': [
+                {
+                    'name': att.original_name,
+                    'url': att.file.url,
+                    'content_type': att.content_type,
+                    'is_image': (att.content_type or '').startswith('image/')
+                }
+                for att in message.attachments.all()
+            ],
+            'created_at': message.created_at.strftime('%d %b %H:%M')
+        }
+    })
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_chat_list(request):
+    threads = ChatThread.objects.select_related('user').order_by('-last_message_at', '-created_at')
+    return render(request, 'admin_panel/chat_list.html', {'threads': threads})
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_chat_detail(request, thread_id):
+    thread = get_object_or_404(ChatThread, id=thread_id)
+
+    if request.method == 'POST':
+        message_text = (request.POST.get('message') or '').strip()
+        files = request.FILES.getlist('attachments')
+        if not message_text and not files:
+            messages.error(request, 'Message or attachment is required.')
+        else:
+            error = _validate_chat_attachments(files)
+            if error:
+                messages.error(request, error)
+            else:
+                message = ChatMessage.objects.create(
+                    thread=thread,
+                    sender_type='ADMIN',
+                    message=message_text
+                )
+                for f in files:
+                    ChatAttachment.objects.create(
+                        message=message,
+                        file=f,
+                        original_name=f.name,
+                        content_type=f.content_type or '',
+                        size_bytes=f.size
+                    )
+                thread.last_message_at = timezone.now()
+                thread.save(update_fields=['last_message_at'])
+                notify_text = message_text or "Sent attachment(s)."
+                _send_user_chat_email(thread, notify_text)
+                messages.success(request, 'Reply sent.')
+                return redirect('admin_chat_detail', thread_id=thread.id)
+
+    messages_qs = thread.messages.prefetch_related('attachments').order_by('created_at')
+    context = {
+        'thread': thread,
+        'messages_list': messages_qs,
+    }
+    return render(request, 'admin_panel/chat_detail.html', context)
+
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
 def admin_add_product(request):
@@ -358,17 +776,10 @@ def admin_add_product(request):
             old_price = request.POST.get('old_price')
             stock = request.POST.get('stock')
             category = request.POST.get('category')
-            
-            # Convert rating and review_count to proper types
-            try:
-                rating = float(request.POST.get('rating', 0)) or 0
-            except (TypeError, ValueError):
-                rating = 0
-            
-            try:
-                review_count = int(float(request.POST.get('review_count', 0))) or 0
-            except (TypeError, ValueError):
-                review_count = 0
+            rating = request.POST.get('rating', 0)
+            review_count = request.POST.get('review_count', 0)
+            is_active = request.POST.get('is_active') == 'on'
+            is_top_deal = request.POST.get('is_top_deal') == 'on'
             
             # Get new fields
             sku = request.POST.get('sku', '')
@@ -386,6 +797,19 @@ def admin_add_product(request):
             image = request.FILES.get('image')
             gallery_images = request.FILES.getlist('gallery_images')
             
+            def normalize_sku(raw_sku):
+                cleaned = (raw_sku or '').strip()
+                if not cleaned:
+                    return None
+                unique_sku = cleaned
+                counter = 1
+                while Product.objects.filter(sku=unique_sku).exists():
+                    unique_sku = f"{cleaned}-{counter}"
+                    counter += 1
+                return unique_sku
+
+            sku = normalize_sku(sku)
+
             # Create product
             product = Product.objects.create(
                 name=name,
@@ -418,10 +842,6 @@ def admin_add_product(request):
                     order=idx,
                     is_active=True
                 )
-
-            # Auto-generate approved reviews if rating/review_count provided
-            if review_count > 0 and rating > 0:
-                generate_auto_reviews(product, review_count, rating, request.user)
             
             messages.success(request, f'Product "{product.name}" added successfully with {len(gallery_images)} gallery images!')
             return redirect('admin_add_product')
@@ -429,105 +849,7 @@ def admin_add_product(request):
         except Exception as e:
             messages.error(request, f'Error adding product: {str(e)}')
     
-    # Get categories for dropdown
-    categories = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
-    return render(request, 'admin_panel/add_product.html', {'categories': categories})
-
-
-def generate_auto_reviews(product, review_total, target_avg, reviewer_user=None):
-    """Generate approved reviews and rating distribution for a product."""
-    try:
-        review_total = int(review_total)
-    except (TypeError, ValueError):
-        return
-
-    try:
-        target_avg = float(target_avg)
-    except (TypeError, ValueError):
-        return
-
-    if review_total <= 0 or target_avg <= 0:
-        return
-
-    target_avg = max(1.0, min(5.0, target_avg))
-
-    # Gaussian-like weights around average
-    weights = {}
-    for r in range(1, 6):
-        dist = (r - target_avg)
-        weights[r] = pow(2.718281828, -(dist ** 2) / 2)
-
-    weight_sum = sum(weights.values()) or 1
-    raw = {r: (weights[r] / weight_sum) * review_total for r in range(1, 6)}
-
-    counts = {r: int(raw[r]) for r in range(1, 6)}
-    remainder = review_total - sum(counts.values())
-    if remainder > 0:
-        remainders = sorted(
-            [(r, raw[r] - counts[r]) for r in range(1, 6)],
-            key=lambda x: x[1],
-            reverse=True
-        )
-        for r, _ in remainders[:remainder]:
-            counts[r] += 1
-
-    target_sum = int(round(target_avg * review_total))
-    current_sum = sum(r * c for r, c in counts.items())
-
-    while current_sum < target_sum:
-        moved = False
-        for r in range(4, 0, -1):
-            if counts[r] > 0:
-                counts[r] -= 1
-                counts[r + 1] += 1
-                current_sum += 1
-                moved = True
-                if current_sum >= target_sum:
-                    break
-        if not moved:
-            break
-
-    while current_sum > target_sum:
-        moved = False
-        for r in range(2, 6):
-            if counts[r] > 0:
-                counts[r] -= 1
-                counts[r - 1] += 1
-                current_sum -= 1
-                moved = True
-                if current_sum <= target_sum:
-                    break
-        if not moved:
-            break
-
-    if reviewer_user is None:
-        reviewer_user = (
-            User.objects.filter(is_superuser=True).first()
-            or User.objects.filter(is_staff=True).first()
-            or User.objects.first()
-        )
-
-    if reviewer_user is None:
-        return
-
-    reviewer_name = "Admin"
-    reviewer_email = "admin@fashionhub.local"
-    if reviewer_user:
-        reviewer_name = reviewer_user.get_full_name().strip() or reviewer_user.username
-        reviewer_email = reviewer_user.email or reviewer_email
-
-    for r in range(5, 0, -1):
-        for _ in range(counts.get(r, 0)):
-            ProductReview.objects.create(
-                product=product,
-                user=reviewer_user,
-                rating=r,
-                name=reviewer_name,
-                email=reviewer_email,
-                comment="",
-                is_approved=True,
-                is_auto_generated=True
-            )
+    return render(request, 'admin_panel/add_product.html')
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
@@ -705,7 +1027,6 @@ def admin_edit_product(request, product_id):
     
     context = {
         'product': product,
-        'categories': CategoryIcon.objects.filter(is_active=True).order_by('order', 'id'),
     }
     return render(request, 'admin_panel/edit_product.html', context)
 
@@ -739,7 +1060,7 @@ def admin_add_category(request):
         try:
             name = request.POST.get('name')
             category_key = request.POST.get('category_key')
-            icon_class = request.POST.get('icon_class', '')
+            icon_class = request.POST.get('icon_class')
             icon_color = request.POST.get('icon_color', '#0288d1')
             background_gradient = request.POST.get('background_gradient', 'linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%)')
             order = request.POST.get('order', 0)
@@ -754,11 +1075,6 @@ def admin_add_category(request):
                 order=order,
                 is_active=is_active
             )
-            
-            # Handle icon image upload
-            if request.FILES.get('icon_image'):
-                category.icon_image = request.FILES['icon_image']
-                category.save()
             
             messages.success(request, f'Category "{category.name}" added successfully!')
             return redirect('admin_categories')
@@ -779,16 +1095,11 @@ def admin_edit_category(request, category_id):
         try:
             category.name = request.POST.get('name')
             category.category_key = request.POST.get('category_key')
-            category.icon_class = request.POST.get('icon_class', '')
+            category.icon_class = request.POST.get('icon_class')
             category.icon_color = request.POST.get('icon_color', '#0288d1')
             category.background_gradient = request.POST.get('background_gradient', 'linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%)')
             category.order = request.POST.get('order', 0)
             category.is_active = request.POST.get('is_active') == 'on'
-            
-            # Handle icon image upload
-            if request.FILES.get('icon_image'):
-                category.icon_image = request.FILES['icon_image']
-            
             category.save()
             
             messages.success(request, f'Category "{category.name}" updated successfully!')
@@ -816,133 +1127,127 @@ def admin_delete_category(request, category_id):
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
-def admin_brand_partners(request):
-    """Admin Brand Partners Management Page"""
-    brand_partners = BrandPartner.objects.all().order_by('order', 'name')
-    
-    context = {
-        'brand_partners': brand_partners,
-    }
-    return render(request, 'admin_panel/brand_partners.html', context)
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_add_brand_partner(request):
-    """Add New Brand Partner"""
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        logo = request.FILES.get('logo')
-        link_url = request.POST.get('link_url', '')
-        order = request.POST.get('order', 0)
-        is_active = request.POST.get('is_active') == 'on'
-        
-        if name and logo:
-            partner = BrandPartner.objects.create(
-                name=name,
-                logo=logo,
-                link_url=link_url,
-                order=order,
-                is_active=is_active
-            )
-            messages.success(request, f'Brand Partner "{name}" added successfully!')
-            return redirect('admin_brand_partners')
-        else:
-            messages.error(request, 'Please provide brand name and logo!')
-    
-    return render(request, 'admin_panel/add_brand_partner.html')
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_edit_brand_partner(request, partner_id):
-    """Edit Brand Partner"""
-    partner = get_object_or_404(BrandPartner, id=partner_id)
+def admin_main_page_products(request):
+    """Manage products displayed on main page by category"""
+    from .models import MainPageProduct
     
     if request.method == 'POST':
-        partner.name = request.POST.get('name')
-        link_url = request.POST.get('link_url', '')
-        partner.link_url = link_url
-        partner.order = request.POST.get('order', 0)
-        partner.is_active = request.POST.get('is_active') == 'on'
+        action = request.POST.get('action')
         
-        # Update logo if new one uploaded
-        if request.FILES.get('logo'):
-            partner.logo = request.FILES.get('logo')
-        
-        partner.save()
-        messages.success(request, f'Brand Partner "{partner.name}" updated successfully!')
-        return redirect('admin_brand_partners')
+        if action == 'add':
+            # Add product to main page
+            product_id = request.POST.get('product_id')
+            category = request.POST.get('category')
+            
+            if product_id and category:
+                try:
+                    product = Product.objects.get(id=product_id)
+                    # Check if already exists
+                    existing = MainPageProduct.objects.filter(product=product, category=category).first()
+                    if not existing:
+                        MainPageProduct.objects.create(product=product, category=category)
+                        messages.success(request, f'✓ {product.name} added to {category}')
+                    else:
+                        messages.warning(request, f'⚠ {product.name} already in {category}')
+                except Product.DoesNotExist:
+                    messages.error(request, 'Product not found')
+            return redirect('admin_main_page_products')
+            
+        elif action == 'remove':
+            # Remove product from main page
+            item_id = request.POST.get('item_id')
+            try:
+                item = MainPageProduct.objects.get(id=item_id)
+                product_name = item.product.name
+                item.delete()
+                messages.success(request, f'✓ {product_name} removed')
+            except MainPageProduct.DoesNotExist:
+                messages.error(request, 'Item not found')
+            return redirect('admin_main_page_products')
+            
+        elif action == 'update_order':
+            # Update display order
+            items = MainPageProduct.objects.all()
+            for item in items:
+                new_order = request.POST.get(f'order_{item.id}')
+                if new_order:
+                    item.order = int(new_order)
+                    item.save()
+            messages.success(request, '✓ Display order updated')
+            return redirect('admin_main_page_products')
+    
+    # Get all main page products organized by category
+    categories = [
+        ('category1', 'Category 1'),
+        ('category2', 'Category 2'),
+        ('category3', 'Category 3'),
+        ('category4', 'Category 4'),
+    ]
+    
+    main_page_items = MainPageProduct.objects.select_related('product').order_by('category', 'order')
+    
+    # Organize by category
+    category_products = {}
+    for cat_key, cat_name in categories:
+        category_products[cat_key] = {
+            'name': cat_name,
+            'products': main_page_items.filter(category=cat_key)
+        }
+    
+    # Get available products
+    available_products = Product.objects.filter(is_active=True).exclude(
+        id__in=MainPageProduct.objects.values_list('product_id', flat=True)
+    ).order_by('-sold', 'name')
     
     context = {
-        'partner': partner,
+        'categories': categories,
+        'category_products': category_products,
+        'available_products': available_products[:50],  # Limit to 50 for dropdown
+        'all_products_count': Product.objects.filter(is_active=True).count(),
     }
-    return render(request, 'admin_panel/edit_brand_partner.html', context)
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_site_settings(request):
-    """Admin Site Settings - Logo, Name, Contact Info"""
-    settings_obj = SiteSettings.get_settings()
     
-    if request.method == 'POST':
-        settings_obj.site_name = request.POST.get('site_name', 'VibeMall')
-        settings_obj.site_name_html = request.POST.get('site_name_html', '')
-        settings_obj.tagline = request.POST.get('tagline', '')
-        settings_obj.contact_email = request.POST.get('contact_email', 'support@vibemall.com')
-        settings_obj.contact_phone = request.POST.get('contact_phone', '+91 1234567890')
-        settings_obj.facebook_url = request.POST.get('facebook_url', '')
-        settings_obj.instagram_url = request.POST.get('instagram_url', '')
-        settings_obj.twitter_url = request.POST.get('twitter_url', '')
-        settings_obj.youtube_url = request.POST.get('youtube_url', '')
-        
-        # Handle logo uploads
-        if request.FILES.get('site_logo'):
-            settings_obj.site_logo = request.FILES.get('site_logo')
-        
-        if request.FILES.get('site_favicon'):
-            settings_obj.site_favicon = request.FILES.get('site_favicon')
-        
-        if request.FILES.get('admin_logo'):
-            settings_obj.admin_logo = request.FILES.get('admin_logo')
-        
-        settings_obj.save()
-        messages.success(request, 'Site settings updated successfully!')
-        return redirect('admin_site_settings')
-    
-    context = {
-        'settings': settings_obj,
-    }
-    return render(request, 'admin_panel/site_settings.html', context)
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_delete_brand_partner(request, partner_id):
-    """Delete Brand Partner"""
-    partner = get_object_or_404(BrandPartner, id=partner_id)
-    partner_name = partner.name
-    partner.delete()
-    
-    messages.success(request, f'Brand Partner "{partner_name}" deleted successfully!')
-    return redirect('admin_brand_partners')
+    return render(request, 'admin_panel/main_page_products.html', context)
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
 def admin_reviews(request):
     """Admin Review Management Page"""
+    from django.db.models import Avg
+
+    def refresh_product_rating(product):
+        """Recalculate product rating and review count from approved reviews"""
+        approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+        if approved_reviews.exists():
+            product.review_count = approved_reviews.count()
+            avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+            product.rating = round(avg_rating, 1) if avg_rating else 0
+        else:
+            product.review_count = 0
+            product.rating = 0
+        product.save(update_fields=['review_count', 'rating'])
+
     # Handle bulk actions
     if request.method == 'POST':
         action = request.POST.get('action')
         review_ids = request.POST.getlist('review_ids')
         
         if action == 'approve' and review_ids:
+            product_ids = list(ProductReview.objects.filter(id__in=review_ids).values_list('product_id', flat=True))
             ProductReview.objects.filter(id__in=review_ids).update(is_approved=True)
+            for product in Product.objects.filter(id__in=product_ids):
+                refresh_product_rating(product)
             messages.success(request, f'{len(review_ids)} review(s) approved successfully!')
         elif action == 'reject' and review_ids:
+            product_ids = list(ProductReview.objects.filter(id__in=review_ids).values_list('product_id', flat=True))
             ProductReview.objects.filter(id__in=review_ids).update(is_approved=False)
+            for product in Product.objects.filter(id__in=product_ids):
+                refresh_product_rating(product)
             messages.success(request, f'{len(review_ids)} review(s) rejected successfully!')
         elif action == 'delete' and review_ids:
+            product_ids = list(ProductReview.objects.filter(id__in=review_ids).values_list('product_id', flat=True))
             ProductReview.objects.filter(id__in=review_ids).delete()
+            for product in Product.objects.filter(id__in=product_ids):
+                refresh_product_rating(product)
             messages.success(request, f'{len(review_ids)} review(s) deleted successfully!')
         
         return redirect('admin_reviews')
@@ -1016,7 +1321,7 @@ def send_admin_new_order_notification(order):
     try:
         # Get admin email from settings (configurable)
         admin_settings = AdminEmailSettings.objects.first()
-        admin_email = admin_settings.admin_email if admin_settings and admin_settings.is_active else 'rajpaladiya2023@gmail.com'
+        admin_email = admin_settings.admin_email if admin_settings and admin_settings.is_active else 'info.vibemall@gmail.com'
         
         subject = f'New Order Received - {order.order_number}'
         message = f"""
@@ -1136,14 +1441,9 @@ def admin_orders(request):
             
             if action in ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED']:
                 # Bulk status update
-                from django.utils import timezone
                 for order in orders:
                     old_status = order.order_status
                     order.order_status = action
-                    # Set delivery_date and payment_status when status changes to DELIVERED
-                    if action == 'DELIVERED' and old_status != 'DELIVERED':
-                        order.delivery_date = timezone.now()
-                        order.payment_status = 'PAID'
                     order.save()
                     # Create status history
                     OrderStatusHistory.objects.create(
@@ -1153,8 +1453,8 @@ def admin_orders(request):
                         changed_by=request.user,
                         notes=f"Bulk status update by {request.user.username}"
                     )
-                    # Send email notification to customer with beautiful template
-                    send_order_status_update_email(order, old_status, action)
+                    # Send email notification to customer
+                    send_order_status_email(order)
                 messages.success(request, f"{len(order_ids)} orders updated to {action}")
                 
             elif action == 'delete':
@@ -1177,18 +1477,6 @@ def admin_orders(request):
     payment_filter = request.GET.get('payment', '')
     if payment_filter:
         all_orders = all_orders.filter(order__payment_status=payment_filter)
-    
-    # Approval status filter
-    approval_filter = request.GET.get('approval', '')
-    if approval_filter:
-        all_orders = all_orders.filter(order__approval_status=approval_filter)
-    
-    # Suspicious orders filter
-    suspicious_filter = request.GET.get('suspicious', '')
-    if suspicious_filter == '1':
-        all_orders = all_orders.filter(order__is_suspicious=True)
-    elif suspicious_filter == '0':
-        all_orders = all_orders.filter(order__is_suspicious=False)
     
     # Date range filter
     date_from = request.GET.get('date_from', '')
@@ -1214,19 +1502,6 @@ def admin_orders(request):
     
     # Sorting
     sort_by = request.GET.get('sort', '-order__created_at')
-    # Fix sorting for fields that belong to Order model (since we're querying OrderItem)
-    if sort_by == 'total_amount':
-        sort_by = 'order__total_amount'
-    elif sort_by == '-total_amount':
-        sort_by = '-order__total_amount'
-    elif sort_by == 'order_status':
-        sort_by = 'order__order_status'
-    elif sort_by == '-order_status':
-        sort_by = '-order__order_status'
-    elif sort_by == 'payment_status':
-        sort_by = 'order__payment_status'
-    elif sort_by == '-payment_status':
-        sort_by = '-order__payment_status'
     all_orders = all_orders.order_by(sort_by)
     
     # === STATISTICS ===
@@ -1237,18 +1512,11 @@ def admin_orders(request):
     delivered_orders = Order.objects.filter(order_status='DELIVERED').count()
     cancelled_orders = Order.objects.filter(order_status='CANCELLED').count()
     
-    # Approval stats
-    pending_approval_orders = Order.objects.filter(approval_status='PENDING_APPROVAL').count()
-    approved_orders = Order.objects.filter(approval_status='APPROVED').count()
-    rejected_orders = Order.objects.filter(approval_status='REJECTED').count()
-    suspicious_orders = Order.objects.filter(is_suspicious=True).count()
-    
-    # Revenue stats (use Order model, not OrderItem)
+    # Revenue stats
     from decimal import Decimal
-    paid_orders = Order.objects.filter(payment_status='PAID')
-    total_revenue = paid_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-    today_revenue = paid_orders.filter(created_at__date=datetime.now().date()).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-    this_month_revenue = paid_orders.filter(created_at__month=datetime.now().month).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    total_revenue = Order.objects.filter(payment_status='PAID').aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    today_revenue = Order.objects.filter(payment_status='PAID', created_at__date=datetime.now().date()).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    this_month_revenue = Order.objects.filter(payment_status='PAID', created_at__month=datetime.now().month).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
     
     # Profit calculation (assuming 30% profit margin)
     profit_margin = Decimal('0.30')
@@ -1297,8 +1565,6 @@ def admin_orders(request):
         'orders': orders,
         'status_filter': status_filter,
         'payment_filter': payment_filter,
-        'approval_filter': approval_filter,
-        'suspicious_filter': suspicious_filter,
         'search_query': search_query,
         'date_from': date_from,
         'date_to': date_to,
@@ -1312,12 +1578,6 @@ def admin_orders(request):
         'shipped_orders': shipped_orders,
         'delivered_orders': delivered_orders,
         'cancelled_orders': cancelled_orders,
-        
-        # Approval stats
-        'pending_approval_orders': pending_approval_orders,
-        'approved_orders': approved_orders,
-        'rejected_orders': rejected_orders,
-        'suspicious_orders': suspicious_orders,
         
         # Revenue
         'total_revenue': total_revenue,
@@ -1345,14 +1605,9 @@ def admin_order_details(request, order_id):
         action = request.POST.get('action')
         
         if action == 'update_status':
-            from django.utils import timezone
             old_status = order.order_status
             new_status = request.POST.get('new_status')
             order.order_status = new_status
-            # Set delivery_date and payment_status when status changes to DELIVERED
-            if new_status == 'DELIVERED' and old_status != 'DELIVERED':
-                order.delivery_date = timezone.now()
-                order.payment_status = 'PAID'
             order.save()
             
             # Create status history
@@ -1364,8 +1619,8 @@ def admin_order_details(request, order_id):
                 notes=request.POST.get('status_notes', '')
             )
             
-            # Send email notification with beautiful template
-            send_order_status_update_email(order, old_status, new_status)
+            # Send email notification
+            send_order_status_email(order)
             messages.success(request, f'Order status updated to {new_status}')
             
         elif action == 'add_tracking':
@@ -1376,7 +1631,7 @@ def admin_order_details(request, order_id):
             
         elif action == 'update_payment':
             old_payment_status = order.payment_status
-            new_payment_status = request.POST.get('new_payment_status') or request.POST.get('payment_status')
+            new_payment_status = request.POST.get('new_payment_status')
             order.payment_status = new_payment_status
             order.save()
             messages.success(request, f'Payment status updated to {order.get_payment_status_display()}')
@@ -1396,245 +1651,6 @@ def admin_order_details(request, order_id):
         'status_history': status_history,
     }
     return render(request, 'admin_panel/order_details.html', context)
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_api_search_orders(request):
-    """Dynamic order search for admin navbar (order ID / number)."""
-    from django.http import JsonResponse
-    from django.db.models import Q
-    from django.urls import reverse
-
-    query = (request.GET.get('q') or '').strip()
-    if not query:
-        return JsonResponse({'results': []})
-
-    orders = Order.objects.select_related('user').filter(
-        Q(order_number__icontains=query)
-    )
-
-    if query.isdigit():
-        orders = orders | Order.objects.select_related('user').filter(id=int(query))
-
-    orders = orders.order_by('-created_at')[:10]
-
-    results = []
-    for order in orders:
-        customer_name = f"{order.user.first_name} {order.user.last_name}".strip() or order.user.username
-        results.append({
-            'id': order.id,
-            'order_number': order.order_number,
-            'customer': customer_name,
-            'total_amount': float(order.total_amount),
-            'order_status': order.order_status,
-            'payment_status': order.payment_status,
-            'created_at': order.created_at.strftime('%d %b %Y, %I:%M %p'),
-            'detail_url': reverse('admin_order_details', args=[order.id]),
-        })
-
-    return JsonResponse({'results': results})
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_api_search_orders(request):
-    """Dynamic order search for admin navbar (order ID / number)."""
-    from django.http import JsonResponse
-    from django.db.models import Q
-    from django.urls import reverse
-
-    query = (request.GET.get('q') or '').strip()
-    if not query:
-        return JsonResponse({'results': []})
-
-    orders = Order.objects.select_related('user').filter(
-        Q(order_number__icontains=query)
-    )
-
-    if query.isdigit():
-        orders = orders | Order.objects.select_related('user').filter(id=int(query))
-
-    orders = orders.order_by('-created_at')[:10]
-
-    results = []
-    for order in orders:
-        customer_name = f"{order.user.first_name} {order.user.last_name}".strip() or order.user.username
-        results.append({
-            'id': order.id,
-            'order_number': order.order_number,
-            'customer': customer_name,
-            'total_amount': float(order.total_amount),
-            'order_status': order.order_status,
-            'payment_status': order.payment_status,
-            'created_at': order.created_at.strftime('%d %b %Y, %I:%M %p'),
-            'detail_url': reverse('admin_order_details', args=[order.id]),
-        })
-
-    return JsonResponse({'results': results})
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_approve_order(request, order_id):
-    """Approve a pending order"""
-    order = get_object_or_404(Order, id=order_id)
-    
-    if order.approval_status != 'PENDING_APPROVAL':
-        messages.warning(request, 'Order is not pending approval.')
-        return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
-    
-    # Update approval status
-    from django.utils import timezone
-    order.approval_status = 'APPROVED'
-    order.approved_by = request.user
-    order.approved_at = timezone.now()
-    order.order_status = 'PROCESSING'
-    
-    # Add approval notes if provided
-    if request.method == 'POST':
-        notes = request.POST.get('approval_notes', '')
-        if notes:
-            order.approval_notes = notes
-    else:
-        order.approval_notes = f'Manually approved by {request.user.username}'
-    
-    order.save()
-    
-    # Send approval email to customer
-    try:
-        from django.template.loader import render_to_string
-        from django.core.mail import EmailMultiAlternatives
-        
-        subject = f'Order Approved - {order.order_number}'
-        
-        # Get site URL
-        site_url = request.build_absolute_uri('/').rstrip('/')
-        
-        # Render HTML email
-        html_content = render_to_string('emails/order_approved.html', {
-            'order': order,
-            'approved_by': request.user.get_full_name() or request.user.username,
-            'site_url': site_url,
-        })
-        
-        # Plain text version
-        text_content = f'''
-        Dear {order.user.get_full_name() or order.user.username},
-        
-        Good news! Your order {order.order_number} has been approved and is now being processed.
-        
-        Order Details:
-        - Order Number: {order.order_number}
-        - Total Amount: ₹{order.total_amount}
-        - Status: Processing
-        
-        Thank you for shopping with us!
-        
-        Best regards,
-        FashioHub Team
-        '''
-        
-        # Send email
-        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
-        email.attach_alternative(html_content, "text/html")
-        email.send()
-        
-    except Exception as e:
-        print(f'Email sending failed: {e}')
-    
-    messages.success(request, f'Order {order.order_number} approved successfully!')
-    return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_reject_order(request, order_id):
-    """Reject a pending order"""
-    order = get_object_or_404(Order, id=order_id)
-    
-    if order.approval_status != 'PENDING_APPROVAL':
-        messages.warning(request, 'Order is not pending approval.')
-        return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
-    
-    # Get rejection reason from POST
-    if request.method == 'POST':
-        rejection_reason = request.POST.get('rejection_reason', '')
-        additional_notes = request.POST.get('additional_notes', '')
-        
-        if not rejection_reason:
-            messages.error(request, 'Please select a rejection reason.')
-            return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
-        
-        # Combine reason and notes
-        full_rejection_message = rejection_reason
-        if additional_notes:
-            full_rejection_message += f"\n\nAdditional Notes: {additional_notes}"
-    else:
-        full_rejection_message = 'Order rejected by admin'
-    
-    # Update approval status
-    from django.utils import timezone
-    order.approval_status = 'REJECTED'
-    order.approved_by = request.user
-    order.approved_at = timezone.now()
-    order.order_status = 'CANCELLED'
-    order.approval_notes = f'Rejected by {request.user.username}.\n\nReason: {full_rejection_message}'
-    order.save()
-    
-    # Send rejection email to customer
-    try:
-        from django.template.loader import render_to_string
-        from django.core.mail import EmailMultiAlternatives
-        
-        subject = f'Order Rejected - {order.order_number}'
-        
-        # Format reason for email (remove emojis)
-        reason_display = rejection_reason
-        if '🚫' in rejection_reason or '📦' in rejection_reason or '🚨' in rejection_reason:
-            reason_display = rejection_reason.split(' ', 1)[-1] if ' ' in rejection_reason else rejection_reason
-        
-        # Render HTML email
-        html_content = render_to_string('emails/order_rejected.html', {
-            'order': order,
-            'rejection_reason': reason_display,
-            'additional_notes': additional_notes if request.method == 'POST' else '',
-        })
-        
-        # Plain text version
-        text_content = f'''
-Dear {order.user.get_full_name() or order.user.username},
-
-We regret to inform you that your order {order.order_number} could not be processed and has been cancelled.
-
-Reason: {reason_display}
-{f"Additional Information: {additional_notes}" if additional_notes else ""}
-
-Order Details:
-- Order Number: {order.order_number}
-- Total Amount: ₹{order.total_amount}
-- Status: Cancelled
-
-If you have any questions or concerns, please contact our customer support.
-
-We apologize for any inconvenience caused and hope to serve you better in the future.
-
-Thank you for your understanding.
-
-Best regards,
-FashioHub Team
-        '''
-        
-        # Send email
-        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
-        email.attach_alternative(html_content, "text/html")
-        email.send()
-        
-    except Exception as e:
-        print(f'Email sending failed: {e}')
-    
-    messages.warning(request, f'Order {order.order_number} rejected. Reason: {rejection_reason}')
-    return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
 
 
 @login_required(login_url='login')
@@ -1711,262 +1727,6 @@ def admin_invoices(request):
     }
     
     return render(request, 'admin_panel/invoices.html', context)
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_invoice_inventory(request):
-    """Unified Invoice & Inventory management dashboard for admins"""
-
-    invoices_qs = (
-        Order.objects
-        .select_related('user')
-        .prefetch_related('items')
-        .order_by('-created_at')
-    )
-
-    status_filter = request.GET.get('status', 'all')
-    payment_filter = request.GET.get('payment', 'all')
-    search_query = request.GET.get('search', '').strip()
-    date_from = request.GET.get('date_from', '')
-    date_to = request.GET.get('date_to', '')
-
-    if status_filter and status_filter.lower() != 'all':
-        invoices_qs = invoices_qs.filter(order_status=status_filter)
-
-    if payment_filter and payment_filter.lower() != 'all':
-        invoices_qs = invoices_qs.filter(payment_status=payment_filter)
-
-    if search_query:
-        invoices_qs = invoices_qs.filter(
-            Q(order_number__icontains=search_query)
-            | Q(user__username__icontains=search_query)
-            | Q(user__email__icontains=search_query)
-            | Q(user__first_name__icontains=search_query)
-            | Q(user__last_name__icontains=search_query)
-        )
-
-    if date_from:
-        invoices_qs = invoices_qs.filter(created_at__date__gte=date_from)
-
-    if date_to:
-        invoices_qs = invoices_qs.filter(created_at__date__lte=date_to)
-
-    items_per_page = request.GET.get('per_page', 10)
-    try:
-        items_per_page = int(items_per_page)
-    except (TypeError, ValueError):
-        items_per_page = 10
-
-    paginator = Paginator(invoices_qs, items_per_page)
-    page_number = request.GET.get('page', 1)
-
-    try:
-        page_obj = paginator.page(page_number)
-    except PageNotAnInteger:
-        page_obj = paginator.page(1)
-    except EmptyPage:
-        page_obj = paginator.page(paginator.num_pages)
-
-    paid_orders_qs = Order.objects.filter(payment_status='PAID')
-    outstanding_orders_qs = Order.objects.filter(payment_status__in=['PENDING', 'FAILED'])
-
-    total_revenue = paid_orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    outstanding_amount = outstanding_orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    average_order_value = paid_orders_qs.aggregate(avg=Avg('total_amount'))['avg'] or Decimal('0.00')
-    overdue_invoices = outstanding_orders_qs.filter(order_status__in=['PENDING', 'PROCESSING']).count()
-
-    low_stock_threshold = 10
-    critical_stock_threshold = 3
-
-    inventory_value_expr = ExpressionWrapper(
-        F('stock') * F('price'),
-        output_field=DecimalField(max_digits=12, decimal_places=2)
-    )
-
-    active_products_qs = Product.objects.filter(is_active=True)
-
-    total_skus = active_products_qs.count()
-    total_units = active_products_qs.aggregate(total=Sum('stock'))['total'] or 0
-    total_inventory_value = active_products_qs.annotate(value=inventory_value_expr).aggregate(total=Sum('value'))['total'] or Decimal('0.00')
-
-    low_stock_qs = (
-        active_products_qs
-        .filter(stock__gt=0, stock__lte=low_stock_threshold)
-        .annotate(value=inventory_value_expr)
-        .order_by('stock')
-    )
-    low_stock_products = list(low_stock_qs[:12])
-
-    out_of_stock_qs = (
-        Product.objects
-        .filter(stock__lte=0)
-        .annotate(value=inventory_value_expr)
-        .order_by('name')
-    )
-    out_of_stock_products = list(out_of_stock_qs[:12])
-
-    low_stock_count = low_stock_qs.count()
-    out_of_stock_count = out_of_stock_qs.count()
-
-    top_movers = list(
-        active_products_qs
-        .annotate(total_sold=Sum('orderitem__quantity'))
-        .filter(total_sold__gt=0)
-        .order_by('-total_sold')[:8]
-    )
-
-    recent_restock = []
-    if any(field.name == 'updated_at' for field in Product._meta.get_fields()):
-        recent_restock = list(
-            active_products_qs
-            .filter(updated_at__isnull=False)
-            .order_by('-updated_at')[:6]
-        )
-
-    # Inventory manager list (all products)
-    inventory_qs = Product.objects.all().order_by('name')
-    product_search_query = request.GET.get('product_search', '').strip()
-
-    if product_search_query:
-        inventory_qs = inventory_qs.filter(
-            Q(name__icontains=product_search_query)
-            | Q(sku__icontains=product_search_query)
-            | Q(brand__icontains=product_search_query)
-        )
-
-    product_items_per_page = request.GET.get('product_per_page', 15)
-    try:
-        product_items_per_page = int(product_items_per_page)
-    except (TypeError, ValueError):
-        product_items_per_page = 15
-
-    product_paginator = Paginator(inventory_qs, product_items_per_page)
-    product_page_number = request.GET.get('product_page', 1)
-
-    try:
-        product_page_obj = product_paginator.page(product_page_number)
-    except PageNotAnInteger:
-        product_page_obj = product_paginator.page(1)
-    except EmptyPage:
-        product_page_obj = product_paginator.page(product_paginator.num_pages)
-
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
-    querystring = query_params.urlencode()
-
-    product_query_params = request.GET.copy()
-    product_query_params.pop('product_page', None)
-    product_querystring = product_query_params.urlencode()
-
-    context = {
-        'page_obj': page_obj,
-        'invoices': page_obj.object_list,
-        'items_per_page': items_per_page,
-        'status_filter': status_filter,
-        'payment_filter': payment_filter,
-        'search_query': search_query,
-        'date_from': date_from,
-        'date_to': date_to,
-        'querystring': querystring,
-        'product_querystring': product_querystring,
-        'current_path': request.get_full_path(),
-
-        'invoice_total_count': invoices_qs.count(),
-        'paid_invoice_count': paid_orders_qs.count(),
-        'outstanding_invoice_count': outstanding_orders_qs.count(),
-        'total_revenue': total_revenue,
-        'outstanding_amount': outstanding_amount,
-        'average_order_value': average_order_value,
-        'overdue_invoices': overdue_invoices,
-
-        'low_stock_products': low_stock_products,
-        'out_of_stock_products': out_of_stock_products,
-        'low_stock_threshold': low_stock_threshold,
-        'critical_stock_threshold': critical_stock_threshold,
-        'low_stock_count': low_stock_count,
-        'out_of_stock_count': out_of_stock_count,
-        'total_skus': total_skus,
-        'total_units': total_units,
-        'total_inventory_value': total_inventory_value,
-        'top_movers': top_movers,
-        'recent_restock': recent_restock,
-        'status_choices': Order.ORDER_STATUS_CHOICES,
-        'payment_status_choices': Order.PAYMENT_STATUS_CHOICES,
-        'product_page_obj': product_page_obj,
-        'inventory_products': product_page_obj.object_list,
-        'product_items_per_page': product_items_per_page,
-        'product_search_query': product_search_query,
-    }
-
-    return render(request, 'admin_panel/invoice_inventory.html', context)
-
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-@require_POST
-def admin_update_inventory(request):
-    """Adjust product stock from the Inventory dashboard."""
-    product_id = request.POST.get('product_id')
-    action = request.POST.get('action', 'save_stock')
-    redirect_url = request.POST.get('next') or reverse('admin_invoice_inventory')
-
-    try:
-        product = Product.objects.get(id=product_id)
-    except Product.DoesNotExist:
-        messages.error(request, 'Product not found')
-        return redirect(redirect_url)
-
-    try:
-        previous_stock = product.stock
-        if action == 'mark_out':
-            product.stock = 0
-            # Keep the product visible with an out-of-stock tag
-            product.is_active = True
-            product.save(update_fields=['stock', 'is_active'])
-            messages.success(request, f'Marked {product.name} as out of stock (visible in shop).')
-        else:
-            raw_stock = request.POST.get('stock', '0')
-            new_stock = max(0, int(raw_stock))
-            product.stock = new_stock
-
-            # Reactivate when restocked; keep visible even at 0
-            product.is_active = True if new_stock >= 0 else product.is_active
-            product.save(update_fields=['stock', 'is_active'])
-            messages.success(request, f'Updated stock for {product.name} to {new_stock}.')
-
-        # Notify subscribers when restocked from zero
-        if previous_stock <= 0 and product.stock > 0:
-            notifications = ProductStockNotification.objects.filter(product=product, is_sent=False)
-            sent_count = 0
-            failed_count = 0
-            last_error = ''
-            for note in notifications:
-                try:
-                    send_mail(
-                        subject=f"{product.name} is back in stock",
-                        message=f"Good news! {product.name} is available again. Visit the product page to purchase.",
-                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-                        recipient_list=[note.email],
-                        fail_silently=False,
-                    )
-                    note.mark_sent()
-                    sent_count += 1
-                except Exception as exc:
-                    failed_count += 1
-                    last_error = str(exc)
-            if notifications.exists():
-                messages.info(request, f"Restock notifications attempted: sent {sent_count}, failed {failed_count}.")
-                if failed_count and last_error:
-                    messages.warning(request, f"Email error: {last_error}")
-            else:
-                messages.info(request, "No pending restock notifications for this product.")
-    except ValueError:
-        messages.error(request, 'Invalid stock value')
-    except Exception as exc:
-        messages.error(request, f'Could not update stock: {exc}')
-
-    return redirect(redirect_url)
 
 
 @login_required
@@ -2282,44 +2042,41 @@ def index(request):
     features = Feature.objects.filter(is_active=True)
     banners = Banner.objects.filter(is_active=True)
     categories = CategoryIcon.objects.filter(is_active=True)
-    top_deals = Product.objects.filter(is_active=True, category='TOP_DEALS')
-    top_selling = Product.objects.filter(is_active=True, category='TOP_SELLING')
-    top_featured = Product.objects.filter(is_active=True, category='TOP_FEATURED')
-    recommended = Product.objects.filter(is_active=True, category='RECOMMENDED')
+    
+    # Get products from MainPageProduct model (4 categories)
+    category1_products = MainPageProduct.objects.filter(category='category1').select_related('product').order_by('order')
+    category2_products = MainPageProduct.objects.filter(category='category2').select_related('product').order_by('order')
+    category3_products = MainPageProduct.objects.filter(category='category3').select_related('product').order_by('order')
+    category4_products = MainPageProduct.objects.filter(category='category4').select_related('product').order_by('order')
+    
+    # Extract product objects and prepare for template (fallback to latest products if no main page products)
+    top_deals = [item.product for item in category1_products[:10]] if category1_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+    top_selling = [item.product for item in category2_products[:10]] if category2_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+    top_featured = [item.product for item in category3_products[:10]] if category3_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+    recommended = [item.product for item in category4_products[:10]] if category4_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+
+    # Build product rating stats for cards
+    product_ids = {p.id for p in list(top_deals) + list(top_selling) + list(top_featured) + list(recommended)}
+    stats_qs = ProductReview.objects.filter(product_id__in=product_ids, is_approved=True).values('product_id').annotate(
+        avg_rating=Avg('rating'),
+        review_count=Count('id')
+    )
+    product_stats = {
+        item['product_id']: {
+            'avg_rating': round(item['avg_rating'] or 0, 1),
+            'review_count': item['review_count']
+        }
+        for item in stats_qs
+    }
+    
     countdown = DealCountdown.objects.filter(is_active=True).first()
-    brand_partners = BrandPartner.objects.filter(is_active=True).order_by('order')
 
     # Get wishlist product IDs for logged-in user
     wishlist_product_ids = []
     cart_product_ids = []
-    delivered_orders = []
-    
     if request.user.is_authenticated:
         wishlist_product_ids = list(Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True))
         cart_product_ids = list(Cart.objects.filter(user=request.user).values_list('product_id', flat=True))
-        
-        # Check for recently delivered orders (delivered in last 7 days without reviews)
-        from datetime import timedelta
-        from django.utils import timezone
-        seven_days_ago = timezone.now() - timedelta(days=7)
-        
-        # Get delivered orders that don't have review notification shown
-        shown_review_notifications = request.session.get('shown_review_notifications', [])
-        
-        delivered_orders = Order.objects.filter(
-            user=request.user,
-            order_status='DELIVERED',
-            delivery_date__gte=seven_days_ago
-        ).exclude(
-            order_number__in=shown_review_notifications
-        ).prefetch_related('items__product')[:3]  # Show up to 3 recent delivered orders
-        
-        # Mark these orders as shown
-        if delivered_orders:
-            for order in delivered_orders:
-                shown_review_notifications.append(order.order_number)
-            request.session['shown_review_notifications'] = shown_review_notifications
-            request.session.modified = True
 
     return render(
         request,
@@ -2334,10 +2091,9 @@ def index(request):
             'top_featured': top_featured,
             'recommended': recommended,
             'countdown': countdown,
+            'product_stats': product_stats,
             'wishlist_product_ids': wishlist_product_ids,
             'cart_product_ids': cart_product_ids,
-            'brand_partners': brand_partners,
-            'delivered_orders': delivered_orders,
         }
     )
 
@@ -2452,22 +2208,6 @@ def checkout(request):
         customer_notes = request.POST.get('customer_notes', '')
         is_resell = request.POST.get('is_resell') == 'on'
         
-        # Loyalty points redemption
-        redeem_points = request.POST.get('redeem_points') == 'on'
-        points_to_redeem = 0
-        if redeem_points:
-            points_to_redeem = int(request.POST.get('points_to_redeem', 0))
-        
-        # Debug: Show selected payment method
-        print(f"[DEBUG] Selected payment method: {payment_method}")
-        if not payment_method or payment_method not in ['COD', 'RAZORPAY']:
-            messages.error(request, 'Please select a valid payment method.')
-            return render(request, 'checkout.html', {
-                'cart_items': cart_items,
-                'total_price': total_price,
-                'buy_now_item': buy_now_item
-            })
-        
         # Resell FROM details
         from_name = request.POST.get('from_name', '')
         from_phone = request.POST.get('from_phone', '')
@@ -2496,27 +2236,7 @@ def checkout(request):
             subtotal = Decimal(str(total_price))
             tax = subtotal * Decimal('0.05')  # 5% tax
             shipping_cost = Decimal('0.00') if subtotal > 500 else Decimal('50.00')  # Free shipping above 500
-            
-            # Apply loyalty points discount (1 point = ₹0.03)
-            points_discount = Decimal('0')
-            if redeem_points and points_to_redeem > 0:
-                # Verify user has enough points
-                loyalty_account = LoyaltyPoints.objects.get(user=request.user)
-                if points_to_redeem <= loyalty_account.points_available:
-                    points_discount = Decimal(str(points_to_redeem)) * Decimal('0.03')
-                else:
-                    messages.error(request, 'Insufficient loyalty points')
-                    return render(request, 'checkout.html', {
-                        'cart_items': cart_items,
-                        'total_price': total_price,
-                        'buy_now_item': buy_now_item
-                    })
-            
-            total_amount = subtotal + tax + shipping_cost - points_discount
-            
-            # Ensure total doesn't go negative
-            if total_amount < 0:
-                total_amount = Decimal('0')
+            total_amount = subtotal + tax + shipping_cost
             
             # Create shipping address
             shipping_address = f"{first_name} {last_name}\n{address}\n{city}, {state} {postcode}\n{country}"
@@ -2537,31 +2257,16 @@ def checkout(request):
                 resell_from_phone=from_phone if is_resell else ''
             )
             
-            # Store points redemption info for later
-            if redeem_points and points_to_redeem > 0:
-                order.admin_notes += f"\nLoyalty Points Redeemed: {points_to_redeem} points (₹{points_discount} discount)"
-                order.save()
-            
             # Add order items
             if buy_now_item:
                 # From buy_now
                 product = buy_now_item['product']
-                # Build absolute image URL
-                product_image = ''
-                if product.image:
-                    image_url = product.image.url
-                    if not image_url.startswith('http'):
-                        site_url = request.build_absolute_uri('/').rstrip('/')
-                        product_image = f"{site_url}{image_url}"
-                    else:
-                        product_image = image_url
-                
                 OrderItem.objects.create(
                     order=order,
                     product=product,
                     product_name=product.name,
                     product_price=buy_now_item['price'],
-                    product_image=product_image,
+                    product_image=product.image.url if product.image else '',
                     quantity=buy_now_item['quantity']
                 )
                 # Clear buy_now from session
@@ -2569,29 +2274,14 @@ def checkout(request):
             else:
                 # From cart
                 for item in cart_items:
-                    # Build absolute image URL
-                    product_image = ''
-                    if item.product.image:
-                        image_url = item.product.image.url
-                        if not image_url.startswith('http'):
-                            site_url = request.build_absolute_uri('/').rstrip('/')
-                            product_image = f"{site_url}{image_url}"
-                        else:
-                            product_image = image_url
-                    
                     OrderItem.objects.create(
                         order=order,
                         product=item.product,
                         product_name=item.product.name,
                         product_price=item.product.price,
-                        product_image=product_image,
+                        product_image=item.product.image.url if item.product.image else '',
                         quantity=item.quantity
                     )
-            
-            # Redeem loyalty points if applicable
-            if redeem_points and points_to_redeem > 0:
-                loyalty_account = LoyaltyPoints.objects.get(user=request.user)
-                loyalty_account.redeem_points(points_to_redeem, f"Order #{order.order_number} - ₹{points_discount} discount")
             
             # Handle payment
             if payment_method == 'RAZORPAY':
@@ -2603,25 +2293,11 @@ def checkout(request):
                 order.order_status = 'PENDING'
                 order.save()
                 
-                # Auto-process approval (fraud detection & auto-approve)
-                order.auto_process_approval()
-                
                 # Clear cart after successful order
                 if not buy_now_item:
                     Cart.objects.filter(user=request.user).delete()
                 
-                # Send order confirmation email to customer
-                send_order_confirmation_email(order)
-                
-                # Send notification email to admin
-                send_admin_order_notification(order, request)
-                
-                # Check if order needs approval
-                if order.approval_status == 'PENDING_APPROVAL':
-                    messages.warning(request, f'Order placed successfully! Order #: {order.order_number}. Your order is pending approval due to security checks.')
-                else:
-                    messages.success(request, f'Order placed successfully! Order #: {order.order_number}')
-                
+                messages.success(request, f'Order placed successfully! Order #: {order.order_number}')
                 return redirect('order_confirmation', order_id=order.id)
                 
         except Exception as e:
@@ -2635,20 +2311,11 @@ def checkout(request):
     # GET request - Show checkout form
     user_profile = UserProfile.objects.filter(user=request.user).first()
     
-    # Get loyalty account
-    loyalty_account = None
-    if request.user.is_authenticated:
-        try:
-            loyalty_account = LoyaltyPoints.objects.get(user=request.user)
-        except LoyaltyPoints.DoesNotExist:
-            pass
-    
     context = {
         'cart_items': cart_items,
         'total_price': total_price,
         'buy_now_item': buy_now_item,
         'user_profile': user_profile,
-        'loyalty_account': loyalty_account,
         'tax_amount': Decimal(str(total_price)) * Decimal('0.05'),
         'shipping_cost': Decimal('0.00') if Decimal(str(total_price)) > 500 else Decimal('50.00'),
         'final_total': Decimal(str(total_price)) + (Decimal(str(total_price)) * Decimal('0.05')) + (Decimal('0.00') if Decimal(str(total_price)) > 500 else Decimal('50.00'))
@@ -2686,33 +2353,15 @@ def product_details(request, product_id=None):
             in_wishlist = False
             if request.user.is_authenticated:
                 in_wishlist = Wishlist.objects.filter(user=request.user, product=product).exists()
-
-            # Auto-generate reviews for existing products if missing
-            if product.review_count and product.rating:
-                existing_qs = ProductReview.objects.filter(product=product, is_approved=True)
-                existing_count = existing_qs.count()
-                if existing_count < product.review_count:
-                    existing_sum = existing_qs.aggregate(total=Sum('rating'))['total'] or 0
-                    desired_sum = int(round(float(product.rating) * int(product.review_count)))
-                    missing_n = int(product.review_count) - existing_count
-                    if missing_n > 0:
-                        missing_sum = desired_sum - existing_sum
-                        missing_avg = missing_sum / missing_n if missing_n else float(product.rating)
-                        if missing_avg < 1:
-                            missing_avg = 1
-                        if missing_avg > 5:
-                            missing_avg = 5
-                        generate_auto_reviews(product, missing_n, missing_avg, request.user if request.user.is_authenticated else None)
             
             # Get filter and sort parameters
             rating_filter = request.GET.get('rating', 'all')
             sort_by = request.GET.get('sort', 'recent')
             
-            # Get approved customer reviews for this product (exclude auto-generated)
+            # Get approved reviews for this product
             approved_reviews = ProductReview.objects.filter(
                 product=product, 
-                is_approved=True,
-                is_auto_generated=False
+                is_approved=True
             ).select_related('user').prefetch_related('images', 'votes')
             
             # Apply rating filter
@@ -2735,7 +2384,7 @@ def product_details(request, product_id=None):
             
             review_count = approved_reviews.count()
             
-            # Calculate rating breakdown (include ALL approved reviews for stats)
+            # Calculate rating breakdown
             total_reviews = ProductReview.objects.filter(product=product, is_approved=True).count()
             rating_breakdown = {
                 5: ProductReview.objects.filter(product=product, is_approved=True, rating=5).count(),
@@ -2750,7 +2399,7 @@ def product_details(request, product_id=None):
             for rating, count in rating_breakdown.items():
                 rating_percentages[rating] = int((count / total_reviews * 100)) if total_reviews > 0 else 0
             
-            # Calculate average rating (include ALL approved reviews for stats)
+            # Calculate average rating
             avg_rating = ProductReview.objects.filter(
                 product=product, 
                 is_approved=True
@@ -2833,12 +2482,9 @@ def shop(request):
         .annotate(total=Count('id'))
     )
     category_count_map = {item['category']: item['total'] for item in category_counts}
-    
-    # Get categories from CategoryIcon (dynamic admin-managed categories)
-    category_icons = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
     category_data = [
-        (cat.category_key, cat.name, category_count_map.get(cat.category_key, 0))
-        for cat in category_icons
+        (value, label, category_count_map.get(value, 0))
+        for value, label in Product.CATEGORY_CHOICES
     ]
 
     wishlist_product_ids = set()
@@ -2862,6 +2508,19 @@ def shop(request):
     except EmptyPage:
         products_page = paginator.page(paginator.num_pages)
 
+    product_ids = [p.id for p in products_page.object_list]
+    stats_qs = ProductReview.objects.filter(product_id__in=product_ids, is_approved=True).values('product_id').annotate(
+        avg_rating=Avg('rating'),
+        review_count=Count('id')
+    )
+    product_stats = {
+        item['product_id']: {
+            'avg_rating': round(item['avg_rating'] or 0, 1),
+            'review_count': item['review_count']
+        }
+        for item in stats_qs
+    }
+
     return render(request, 'shop.html', {
         'products': products_page,
         'banners': banners,
@@ -2873,6 +2532,7 @@ def shop(request):
         'selected_rating': min_rating or '',
         'wishlist_product_ids': wishlist_product_ids,
         'cart_product_ids': cart_product_ids,
+        'product_stats': product_stats,
     })
 def shop_details(request): return render(request, 'shop-details.html')
 
@@ -2951,16 +2611,6 @@ def add_to_cart(request):
     
     try:
         product = Product.objects.get(id=product_id, is_active=True)
-
-        if product.stock <= 0:
-            if is_ajax:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'This item is out of stock'
-                }, status=400)
-            messages.error(request, f"{product.name} is out of stock")
-            return redirect('product-details', product_id=product.id)
-
         cart_item, created = Cart.objects.get_or_create(
             user=request.user,
             product=product,
@@ -2968,10 +2618,7 @@ def add_to_cart(request):
         )
         
         if not created:
-            new_qty = cart_item.quantity + quantity
-            if new_qty > product.stock:
-                new_qty = product.stock
-            cart_item.quantity = new_qty
+            cart_item.quantity += quantity
             cart_item.save()
         
         # Get total cart count
@@ -2998,40 +2645,6 @@ def add_to_cart(request):
             return redirect('shop')
 
 
-@require_POST
-def request_stock_notification(request, product_id):
-    """Capture email to notify when a product is restocked."""
-    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    product = get_object_or_404(Product, id=product_id)
-
-    email = request.POST.get('email') or (request.user.email if request.user.is_authenticated else '')
-    if not email:
-        message = 'Please provide an email so we can notify you.'
-        if is_ajax:
-            return JsonResponse({'success': False, 'message': message}, status=400)
-        messages.error(request, message)
-        return redirect('product-details', product_id=product.id)
-
-    notification, created = ProductStockNotification.objects.get_or_create(
-        product=product,
-        email=email,
-        defaults={'user': request.user if request.user.is_authenticated else None}
-    )
-
-    if not created and request.user.is_authenticated and notification.user is None:
-        notification.user = request.user
-        notification.save(update_fields=['user'])
-
-    message = 'We will email you as soon as this item is back in stock.' if created else 'You are already subscribed for a restock alert.'
-
-    if is_ajax:
-        return JsonResponse({'success': True, 'message': message})
-
-    messages.success(request, message)
-    next_url = request.META.get('HTTP_REFERER') or reverse('product-details', args=[product.id])
-    return redirect(next_url)
-
-
 @login_required(login_url='login')
 def remove_from_cart(request, cart_id):
     """Remove product from cart"""
@@ -3051,12 +2664,6 @@ def ajax_toggle_cart(request, product_id):
     """AJAX endpoint to toggle product in/out of cart"""
     try:
         product = Product.objects.get(id=product_id)
-        if product.stock <= 0:
-            return JsonResponse({
-                'success': False,
-                'message': 'This item is out of stock',
-                'in_cart': False
-            }, status=400)
         cart_item = Cart.objects.filter(user=request.user, product=product).first()
         
         if cart_item:
@@ -3186,37 +2793,24 @@ def submit_review(request, product_id):
         product = Product.objects.get(id=product_id, is_active=True)
         
         rating = int(request.POST.get('rating', 5))
+        name = request.POST.get('name', '').strip()
+        email = request.POST.get('email', '').strip()
         comment = request.POST.get('comment', '').strip()
         
-        # Auto-fill user details if logged in
-        if request.user.is_authenticated:
-            name = request.user.get_full_name() or request.user.username
-            email = request.user.email
-        else:
-            name = request.POST.get('name', '').strip()
-            email = request.POST.get('email', '').strip()
-        
-        # Check if user has purchased this product (verified purchase)
-        is_verified_purchase = False
-        order_id = request.POST.get('order_id')
-        if request.user.is_authenticated and order_id:
-            is_verified_purchase = Order.objects.filter(
-                id=order_id,
-                user=request.user,
-                order_status='DELIVERED',
-                items__product=product
-            ).exists()
+        if not all([name, email, comment]):
+            messages.error(request, "Please fill in all required fields.")
+            return redirect('product-details', product_id=product_id)
         
         # Create review (not approved by default)
         review = ProductReview.objects.create(
             product=product,
-            user=request.user if request.user.is_authenticated else None,
+            user=request.user,
             rating=rating,
             name=name,
             email=email,
             comment=comment,
             is_approved=False,  # Admin must approve
-            is_verified_purchase=is_verified_purchase
+            is_verified_purchase=False  # TODO: Check if user has purchased
         )
         
         # Handle image uploads (up to 5 images)
@@ -3231,8 +2825,7 @@ def submit_review(request, product_id):
     except ValueError:
         messages.error(request, "Invalid rating value")
     
-    # Redirect to referrer or homepage
-    return redirect(request.META.get('HTTP_REFERER', 'index'))
+    return redirect('product-details', product_id=product_id)
 
 
 @login_required
@@ -3363,50 +2956,7 @@ def profile_view(request):
         return redirect('profile')
 
     profile, created = UserProfile.objects.get_or_create(user=request.user)
-    
-    # Get loyalty points and transactions
-    loyalty_account, _ = LoyaltyPoints.objects.get_or_create(user=request.user)
-    points_transactions = PointsTransaction.objects.filter(user=request.user).order_by('-created_at')[:10]
-    
-    return render(request, 'profile.html', {
-        'profile': profile,
-        'loyalty_account': loyalty_account,
-        'points_transactions': points_transactions
-    })
-
-
-@login_required(login_url='login')
-def api_profile_stats(request):
-    """Return live profile stats and recent orders."""
-    from django.http import JsonResponse
-    from django.urls import reverse
-
-    user = request.user
-    orders = Order.objects.filter(user=user)
-
-    total_orders = orders.count()
-    delivered_orders = orders.filter(order_status='DELIVERED').count()
-    cancelled_orders = orders.filter(order_status='CANCELLED').count()
-    pending_orders = orders.filter(order_status__in=['PENDING', 'PROCESSING', 'SHIPPED']).count()
-
-    recent_orders = orders.order_by('-created_at')[:5]
-    recent_list = []
-    for order in recent_orders:
-        recent_list.append({
-            'order_number': order.order_number,
-            'status': order.order_status,
-            'total_amount': float(order.total_amount),
-            'created_at': order.created_at.strftime('%d %b %Y'),
-            'detail_url': reverse('order_details', args=[order.order_number]),
-        })
-
-    return JsonResponse({
-        'total_orders': total_orders,
-        'delivered_orders': delivered_orders,
-        'pending_orders': pending_orders,
-        'cancelled_orders': cancelled_orders,
-        'recent_orders': recent_list,
-    })
+    return render(request, 'profile.html', {'profile': profile})
 
 
 
@@ -3417,8 +2967,8 @@ def api_profile_stats(request):
 @login_required(login_url='login')
 def add_product(request):
     # Check if user is admin (username = 'admin')
-    if request.user.username != 'FashionHub':
-        messages.error(request, 'Access denied. Only FashionHub user can add products.')
+    if request.user.username != 'VibeMall':
+        messages.error(request, 'Access denied. Only VibeMall user can add products.')
         return redirect('index')
     
     if request.method == 'POST':
@@ -3485,47 +3035,16 @@ def add_product(request):
                     is_active=True
                 )
             
-            # Auto-create CategoryIcon if category is selected and doesn't exist
-            if category:
-                category_name = dict(Product.CATEGORY_CHOICES).get(category, category)
-                CategoryIcon.objects.get_or_create(
-                    category_key=category,
-                    defaults={
-                        'name': category_name,
-                        'background_gradient': 'linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%)',
-                        'icon_color': '#1976D2',
-                        'is_active': True,
-                        'order': CategoryIcon.objects.count()
-                    }
-                )
-            
             messages.success(request, f'Product "{product.name}" added successfully with {len(gallery_images)} gallery images!')
             return redirect('add_product')
             
         except Exception as e:
             messages.error(request, f'Error adding product: {str(e)}')
     
-    # Get filter parameter
-    category_filter = request.GET.get('category', '')
-    
     # Get all products for display
-    products = Product.objects.all()
+    products = Product.objects.all().order_by('-id')[:10]
     
-    # Apply category filter if selected
-    if category_filter:
-        products = products.filter(category=category_filter)
-    
-    products = products.order_by('-id')[:30]  # Show last 30 products
-    
-    # Get all available categories from products
-    available_categories = Product.objects.exclude(category__isnull=True).exclude(category='').values_list('category', flat=True).distinct()
-    category_choices = [{'key': cat, 'name': dict(Product.CATEGORY_CHOICES).get(cat, cat)} for cat in available_categories]
-    
-    return render(request, 'add_product.html', {
-        'products': products,
-        'category_choices': category_choices,
-        'selected_category': category_filter
-    })
+    return render(request, 'add_product.html', {'products': products})
 
 # ===== AJAX WISHLIST VIEW =====
 
@@ -3924,60 +3443,22 @@ def admin_adjust_rating(request, product_id):
 @require_POST
 def admin_approve_review(request, review_id):
     """Admin Approve Review"""
-    from django.http import JsonResponse
-    
     review = get_object_or_404(ProductReview, id=review_id)
-    
-    # If POST request with edited data (from modal)
-    if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        import json
-        try:
-            data = json.loads(request.body)
-            edited_rating = data.get('rating')
-            edited_comment = data.get('comment')
-            
-            # Validate and update rating
-            if edited_rating and 1 <= int(edited_rating) <= 5:
-                review.rating = int(edited_rating)
-            
-            # Update comment if provided
-            if edited_comment and edited_comment.strip():
-                review.comment = edited_comment.strip()
-            
-            review.is_approved = True
-            review.save()
-            
-            # Update product review count and rating
-            product = review.product
-            product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
-            
-            # Recalculate average rating
-            approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
-            if approved_reviews.exists():
-                from django.db.models import Avg
-                avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
-                product.rating = round(avg_rating, 1)
-            
-            product.save()
-            
-            return JsonResponse({
-                'success': True,
-                'message': 'Review approved successfully!'
-            })
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': str(e)
-            }, status=400)
-    
-    # Regular approval without editing
     review.is_approved = True
     review.save()
     
-    # Update product review count
+    # Update product review count and rating
+    from django.db.models import Avg
     product = review.product
-    product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
-    product.save()
+    approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+    if approved_reviews.exists():
+        product.review_count = approved_reviews.count()
+        avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+        product.rating = round(avg_rating, 1) if avg_rating else 0
+    else:
+        product.review_count = 0
+        product.rating = 0
+    product.save(update_fields=['review_count', 'rating'])
     
     messages.success(request, 'Review approved successfully!')
     return redirect('admin_reviews')
@@ -3991,108 +3472,20 @@ def admin_delete_review(request, review_id):
     product = review.product
     review.delete()
     
-    # Update product review count
-    product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
-    product.save()
+    # Update product review count and rating
+    from django.db.models import Avg
+    approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+    if approved_reviews.exists():
+        product.review_count = approved_reviews.count()
+        avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+        product.rating = round(avg_rating, 1) if avg_rating else 0
+    else:
+        product.review_count = 0
+        product.rating = 0
+    product.save(update_fields=['review_count', 'rating'])
     
     messages.success(request, 'Review deleted successfully!')
     return redirect('admin_reviews')
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_review_details(request, review_id):
-    """Get Review Details as JSON"""
-    from django.http import JsonResponse
-    
-    try:
-        review = get_object_or_404(ProductReview, id=review_id)
-        
-        # Get review images
-        review_images = []
-        for img in review.images.all():
-            review_images.append(request.build_absolute_uri(img.image.url))
-        
-        # Build response data
-        data = {
-            'id': review.id,
-            'product': {
-                'id': review.product.id,
-                'name': review.product.name,
-                'image': request.build_absolute_uri(review.product.image.url) if review.product.image else None,
-            },
-            'user': {
-                'name': review.name,
-                'email': review.email,
-            },
-            'rating': review.rating,
-            'comment': review.comment,
-            'is_verified_purchase': review.is_verified_purchase,
-            'is_approved': review.is_approved,
-            'created_at': review.created_at.strftime('%B %d, %Y at %I:%M %p'),
-            'images': review_images,
-            'helpful_count': review.helpful_count,
-            'not_helpful_count': review.not_helpful_count,
-        }
-        
-        return JsonResponse(data)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
-def admin_add_review(request, product_id):
-    """Admin Add Review to Product"""
-    from django.http import JsonResponse
-    
-    product = get_object_or_404(Product, id=product_id)
-    
-    if request.method == 'POST':
-        try:
-            # Get admin review details
-            rating = int(request.POST.get('rating', 5))
-            comment = request.POST.get('comment', '').strip()
-            name = request.POST.get('name', request.user.get_full_name() or request.user.username)
-            email = request.POST.get('email', request.user.email)
-            
-            # Validate
-            if not 1 <= rating <= 5:
-                return JsonResponse({'success': False, 'message': 'Rating must be between 1 and 5'}, status=400)
-            
-            # Create review (admin reviews are auto-approved)
-            review = ProductReview.objects.create(
-                product=product,
-                user=request.user,
-                rating=rating,
-                comment=comment,
-                name=name,
-                email=email,
-                is_approved=True,
-                is_verified_purchase=False  # Admin reviews are not verified purchases
-            )
-            
-            # Update product review count and rating
-            product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
-            
-            # Recalculate average rating
-            from django.db.models import Avg
-            approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
-            if approved_reviews.exists():
-                avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
-                product.rating = round(avg_rating, 1)
-            
-            product.save()
-            
-            return JsonResponse({
-                'success': True,
-                'message': 'Review added successfully!',
-                'review_id': review.id
-            })
-        
-        except Exception as e:
-            return JsonResponse({'success': False, 'message': str(e)}, status=500)
-    
-    return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
-
 
 # ===== ORDER CONFIRMATION & PAYMENT VIEWS =====
 
@@ -4100,24 +3493,16 @@ def admin_add_review(request, product_id):
 def order_confirmation(request, order_id):
     """Order Confirmation Page"""
     order = get_object_or_404(Order, id=order_id, user=request.user)
-    # If payment method is Razorpay and not paid, redirect to payment page
-    if order.payment_method == 'RAZORPAY' and order.payment_status != 'PAID' and order.payment_status != 'PROCESSING':
-        messages.warning(request, 'Please complete your payment to confirm the order.')
-        return redirect('razorpay_payment', order_id=order.id)
-    
-    # Calculate loyalty points earned (₹1 = 33 points, 1 point = ₹0.03)
-    loyalty_points_earned = int(order.total_amount * 33)
-    
     context = {
         'order': order,
         'order_items': order.items.all(),
-        'loyalty_points_earned': loyalty_points_earned,
     }
     return render(request, 'order_confirmation.html', context)
 
+
 @login_required(login_url='login')
 def razorpay_payment(request, order_id):
-    """Razorpay Payment Page with OSrder Creation"""
+    """Razorpay Payment Page with Order Creation"""
     import razorpay
     
     order = get_object_or_404(Order, id=order_id, user=request.user)
@@ -4133,17 +3518,11 @@ def razorpay_payment(request, order_id):
     try:
         # Create Razorpay client
         client = razorpay.Client(auth=(razorpay_key, razorpay_secret))
-
-        # Amount in paise (ensure int to avoid float issues)
-        amount_paise = int(order.total_amount * 100)
-        if amount_paise <= 0:
-            messages.error(request, 'Invalid order amount for payment')
-            return redirect('order_confirmation', order_id=order.id)
-
+        
         # Create Razorpay order if not already created
         if not order.razorpay_order_id:
             razorpay_order = client.order.create({
-                'amount': amount_paise,
+                'amount': int(order.total_amount * 100),  # Amount in paise
                 'currency': 'INR',
                 'receipt': order.order_number,
                 'notes': {
@@ -4155,13 +3534,13 @@ def razorpay_payment(request, order_id):
             
             # Save Razorpay order ID
             order.razorpay_order_id = razorpay_order['id']
-            order.save(update_fields=['razorpay_order_id'])
+            order.save()
         
         context = {
             'order': order,
             'razorpay_key': razorpay_key,
             'razorpay_order_id': order.razorpay_order_id,
-            'order_amount': amount_paise,
+            'order_amount': int(order.total_amount * 100),  # Convert to paise
         }
         return render(request, 'razorpay_payment.html', context)
         
@@ -4202,39 +3581,21 @@ def razorpay_payment_success(request):
             order.order_status = 'PROCESSING'
             order.razorpay_payment_id = payment_id
             order.razorpay_signature = signature
-            order.save(update_fields=['payment_status', 'order_status', 'razorpay_payment_id', 'razorpay_signature'])
-            
-            # Auto-process approval (fraud detection & auto-approve)
-            order.auto_process_approval()
+            order.save()
             
             # Clear cart
             Cart.objects.filter(user=request.user).delete()
             
-            # Send order confirmation email
-            send_order_confirmation_email(order)
-            
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'success': True, 'redirect': reverse('order_confirmation', args=[order.id])})
-            
-            # Check if order needs approval
-            if order.approval_status == 'PENDING_APPROVAL':
-                messages.warning(request, 'Payment successful! Your order is pending approval due to security checks.')
-            else:
-                messages.success(request, 'Payment successful! Your order is being processed.')
-            
+            messages.success(request, 'Payment successful! Your order is being processed.')
             return redirect('order_confirmation', order_id=order.id)
             
         except Exception as e:
             order.payment_status = 'FAILED'
-            order.save(update_fields=['payment_status'])
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'message': 'Payment verification failed'}, status=400)
+            order.save()
             messages.error(request, 'Payment verification failed')
             return redirect('checkout')
             
     except Exception as e:
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'success': False, 'message': f'Error processing payment: {str(e)}'}, status=400)
         messages.error(request, f'Error processing payment: {str(e)}')
         return redirect('checkout')
 
@@ -4245,64 +3606,18 @@ def razorpay_payment_cancel(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
     
     # Update order status
-    from django.utils import timezone
     order.payment_status = 'FAILED'
     order.order_status = 'CANCELLED'
     order.save()
-    
-    # Send cancellation email
-    try:
-        from django.template.loader import render_to_string
-        from django.core.mail import EmailMultiAlternatives
-        
-        subject = f'Order Cancelled - {order.order_number}'
-        
-        # Get site URL
-        site_url = request.build_absolute_uri('/').rstrip('/')
-        
-        # Render HTML email
-        html_content = render_to_string('emails/order_cancelled.html', {
-            'order': order,
-            'cancelled_at': timezone.now(),
-            'site_url': site_url,
-        })
-        
-        # Plain text version
-        text_content = f'''
-Dear {order.user.get_full_name() or order.user.username},
-
-Your order {order.order_number} has been cancelled as per your request.
-
-Order Details:
-- Order Number: {order.order_number}
-- Total Amount: ₹{order.total_amount}
-- Status: Cancelled
-
-Thank you for your understanding.
-
-Best regards,
-FashioHub Team
-        '''
-        
-        # Send email
-        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
-        email.attach_alternative(html_content, "text/html")
-        email.send()
-        
-    except Exception as e:
-        print(f'Email sending failed: {e}')
     
     messages.warning(request, 'Payment was cancelled. You can try again from your orders.')
     return redirect('checkout')
 
 
-from django.views.decorators.csrf import csrf_exempt
-
-
-@csrf_exempt
+@login_required(login_url='login')
 @require_POST
 def razorpay_webhook(request):
-    """Handle Razorpay Webhook Events (no auth, signature verified)"""
+    """Handle Razorpay Webhook Events"""
     import razorpay
     import json
     from django.views.decorators.csrf import csrf_exempt
@@ -4483,18 +3798,6 @@ def order_list(request):
     return render(request, 'order_list.html', {'orders': orders})
 
 
-def track_order_page(request):
-    """Order tracking search page"""
-    if request.method == 'POST':
-        order_number = request.POST.get('order_number', '').strip()
-        if order_number:
-            return redirect('order_tracking', order_number=order_number)
-        else:
-            messages.error(request, 'Please enter an order number')
-    
-    return render(request, 'track_order.html')
-
-
 def order_details(request, order_number):
     """Display detailed view of a specific order"""
     if not request.user.is_authenticated:
@@ -4512,472 +3815,258 @@ def order_details(request, order_number):
         return redirect('order_list')
 
 
-def order_tracking(request, order_number):
-    """Display beautiful timeline tracking for a specific order"""
+def download_invoice(request, order_number):
+    """Generate and download PDF invoice for an order"""
     if not request.user.is_authenticated:
         return redirect('login')
     
     try:
-        order = Order.objects.get(order_number=order_number, user=request.user)
-        order_items = OrderItem.objects.filter(order=order)
-        return render(request, 'order_tracking.html', {
-            'order': order,
-            'order_items': order_items
-        })
-    except Order.DoesNotExist:
-        messages.error(request, 'Order not found')
-        return redirect('order_list')
-
-
-@login_required(login_url='login')
-@require_POST
-def customer_cancel_order(request, order_id):
-    """Allow customer to cancel their own order (before shipping)"""
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    
-    # Only allow cancellation if order is PENDING or PROCESSING
-    if order.order_status not in ['PENDING', 'PROCESSING', 'PENDING_APPROVAL']:
-        messages.error(request, 'This order cannot be cancelled as it has already been shipped.')
-        return redirect(request.META.get('HTTP_REFERER', 'index'))
-    
-    # Update order status
-    from django.utils import timezone
-    old_status = order.order_status
-    order.order_status = 'CANCELLED'
-    order.approval_notes = f'Customer cancelled order on {timezone.now().strftime("%d %b, %Y at %I:%M %p")}'
-    order.save()
-    
-    # Send cancellation email
-    try:
-        from django.template.loader import render_to_string
-        from django.core.mail import EmailMultiAlternatives
+        import os
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+        from io import BytesIO
         
-        subject = f'Order Cancelled - {order.order_number}'
-        
-        # Get site URL
-        site_url = request.build_absolute_uri('/').rstrip('/')
-        
-        # Render HTML email
-        html_content = render_to_string('emails/order_cancelled.html', {
-            'order': order,
-            'cancelled_at': timezone.now(),
-            'site_url': site_url,
-        })
-        
-        # Plain text version
-        text_content = f'''
-Dear {order.user.get_full_name() or order.user.username},
-
-Your order {order.order_number} has been cancelled as per your request.
-
-Order Details:
-- Order Number: {order.order_number}
-- Total Amount: ₹{order.total_amount}
-- Status: Cancelled
-- Cancelled On: {timezone.now().strftime("%d %b, %Y")}
-
-{"A refund will be initiated within 5-7 business days." if order.payment_status == "Paid" else "No payment has been deducted from your account."}
-
-Thank you for your understanding.
-
-Best regards,
-FashioHub Team
-        '''
-        
-        # Send email
-        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
-        email.attach_alternative(html_content, "text/html")
-        email.send()
-        
-    except Exception as e:
-        print(f'Email sending failed: {e}')
-    
-    messages.success(request, f'Order {order.order_number} has been cancelled successfully.')
-    return redirect(request.META.get('HTTP_REFERER', 'index'))
-
-
-@login_required(login_url='login')
-@never_cache
-def download_invoice(request, order_number):
-    """Generate and download PDF invoice for an order"""
-    import os
-    import traceback
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT, TA_JUSTIFY
-    from io import BytesIO
-    
-    # Register HEIF/AVIF support for Pillow
-    try:
-        import pillow_heif
-        pillow_heif.register_heif_opener()
-    except ImportError:
-        pass  # pillow-heif not installed, will fall back to showing '-'
-    
-    try:
         # Get order
-        order_filter = {'order_number': order_number}
-        if not request.user.is_staff:
-            order_filter['user'] = request.user
-
         try:
-            order = Order.objects.get(**order_filter)
+            order = Order.objects.get(order_number=order_number, user=request.user)
             order_items = OrderItem.objects.filter(order=order)
         except Order.DoesNotExist:
-            # Don't use messages here; just return error response
-            if request.user.is_staff:
-                return redirect('admin_invoice_inventory')
-            return HttpResponse('Order not found.', status=404)
+            messages.error(request, 'Order not found')
+            return redirect('order_list')
         
-        # Create PDF buffer
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, 
-                                rightMargin=36, leftMargin=36,
-                                topMargin=36, bottomMargin=30)
-        
-        elements = []
-        styles = getSampleStyleSheet()
-        
-        # Define custom styles
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            textColor=colors.HexColor('#1e293b'),
-            spaceAfter=6,
-            fontName='Helvetica-Bold'
-        )
-        
-        heading_style = ParagraphStyle(
-            'CustomHeading',
-            parent=styles['Heading2'],
-            fontSize=11,
-            textColor=colors.HexColor('#1e293b'),
-            spaceAfter=8,
-            fontName='Helvetica-Bold',
-            borderPadding=6,
-            backgroundColor=colors.HexColor('#f8fafc'),
-            borderColor=colors.HexColor('#e2e8f0'),
-            borderWidth=0.5,
-            leftIndent=6
-        )
-        
-        label_style = ParagraphStyle(
-            'Label',
-            parent=styles['Normal'],
-            fontSize=9,
-            textColor=colors.HexColor('#64748b'),
-            fontName='Helvetica-Bold'
-        )
-        
-        value_style = ParagraphStyle(
-            'Value',
-            parent=styles['Normal'],
-            fontSize=10,
-            textColor=colors.HexColor('#1e293b'),
-            fontName='Helvetica'
-        )
-        
-        # ===== HEADER SECTION =====
-        header_data = [
-            [
-                Paragraph('<b>VibeMall</b>', styles['Heading2']),
-                Paragraph(f'<b style="font-size: 18">INVOICE</b>', styles['Heading2'])
-            ]
-        ]
-        header_table = Table(header_data, colWidths=[4*inch, 2*inch])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
-        elements.append(header_table)
-        elements.append(Spacer(1, 12))
-        
-        # ===== INVOICE INFO ROW =====
-        # Ensure a font that supports the rupee symbol is registered.
-        # Try several common system font locations and register the first available TTF.
-        try:
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-            candidate_paths = [
-                # Common Linux paths
-                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
-                '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
-                # Common Windows paths
-                'C:/Windows/Fonts/DejaVuSans.ttf',
-                'C:/Windows/Fonts/NotoSans-Regular.ttf',
-                'C:/Windows/Fonts/seguiemj.ttf',
-                'C:/Windows/Fonts/SegoeUIEmoji.ttf',
-                'C:/Windows/Fonts/arialuni.ttf',
-                'C:/Windows/Fonts/arial.ttf',
-            ]
-
-            base_font_name = None
-            bold_font_name = None
-            for path in candidate_paths:
-                if os.path.exists(path):
+        def build_invoice(currency_symbol):
+            """Build PDF invoice with error handling"""
+            # Create PDF buffer
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                                    rightMargin=36, leftMargin=36,
+                                    topMargin=36, bottomMargin=30)
+            
+            elements = []
+            styles = getSampleStyleSheet()
+            styles.add(ParagraphStyle(name='Center', alignment=TA_CENTER))
+            styles.add(ParagraphStyle(name='Right', alignment=TA_RIGHT))
+            styles.add(ParagraphStyle(name='Left', alignment=TA_LEFT))
+            styles.add(ParagraphStyle(name='TitleRight', alignment=TA_RIGHT, fontSize=22, leading=24))
+            styles.add(ParagraphStyle(name='Label', fontSize=9, textColor=colors.HexColor('#6b6b6b')))
+            styles.add(ParagraphStyle(name='Body', fontSize=10, leading=14))
+            styles.add(ParagraphStyle(name='Small', fontSize=9, leading=12))
+            styles.add(ParagraphStyle(name='Total', fontSize=14, leading=16))
+            
+            def money(value):
+                return f"{currency_symbol}{float(value):.2f}"
+            
+            # Try to load logos
+            logo_primary_path = os.path.join(settings.BASE_DIR, 'Hub', 'static', 'assets', 'img', 'logo', 'logo-white.png')
+            logo_secondary_path = os.path.join(settings.BASE_DIR, 'Hub', 'static', 'assets', 'img', 'logo', 'logo-invoice.png')
+            
+            logo_primary = None
+            try:
+                if os.path.exists(logo_primary_path):
+                    logo_primary = Image(logo_primary_path, width=120, height=40)
+            except Exception:
+                pass
+            
+            logo_secondary = None
+            try:
+                if os.path.exists(logo_secondary_path):
+                    logo_secondary = Image(logo_secondary_path, width=110, height=36)
+            except Exception:
+                pass
+            
+            # Header
+            header_left = logo_primary if logo_primary else Paragraph('<b>VibeMall</b>', styles['Body'])
+            header_right = Paragraph('<b>INVOICE</b>', styles['TitleRight'])
+            header_table = Table([[header_left, header_right]], colWidths=[3.5*inch, 2.5*inch])
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ]))
+            elements.append(header_table)
+            elements.append(Spacer(1, 14))
+            
+            # Billing info
+            billed_to = Paragraph('<b>BILLED TO:</b>', styles['Label'])
+            address_text = order.shipping_address.replace('\n', '<br/>')
+            billed_body = Paragraph(address_text, styles['Body'])
+            invoice_info = Paragraph(
+                f"<b>Invoice No.</b> {order.order_number}<br/>"
+                f"<b>Date</b> {order.created_at.strftime('%d %B %Y')}",
+                styles['Body']
+            )
+            info_table = Table([
+                [billed_to, Paragraph('', styles['Body'])],
+                [billed_body, invoice_info]
+            ], colWidths=[3.5*inch, 2.5*inch])
+            info_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (1, 1), (1, 1), 'RIGHT'),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(info_table)
+            elements.append(Spacer(1, 10))
+            
+            # Divider
+            divider = Table([['']], colWidths=[6*inch])
+            divider.setStyle(TableStyle([
+                ('LINEBELOW', (0, 0), (-1, -1), 0.6, colors.black),
+            ]))
+            elements.append(divider)
+            elements.append(Spacer(1, 12))
+            
+            # Items table
+            items = [['Image', 'Item', 'Qty', 'Unit Price', 'Total']]
+            
+            for item in order_items:
+                item_total = Decimal(str(item.product_price)) * Decimal(str(item.quantity))
+                
+                # Try to add product image
+                img_cell = Paragraph('-', styles['Small'])
+                
+                if item.product_image and str(item.product_image).strip():
                     try:
-                        pdfmetrics.registerFont(TTFont('Invoice', path))
-                        base_font_name = 'Invoice'
-                        # try to find a bold variant nearby
-                        bold_candidates = [
-                            path.replace('.ttf', ' Bold.ttf'),
-                            path.replace('.ttf', '-Bold.ttf'),
-                            path.replace('.ttf', 'Bd.ttf'),
-                            path.replace('.ttf', 'Bold.ttf'),
-                        ]
-                        for bpath in bold_candidates:
-                            if os.path.exists(bpath):
-                                try:
-                                    pdfmetrics.registerFont(TTFont('Invoice-Bold', bpath))
-                                    bold_font_name = 'Invoice-Bold'
-                                    break
-                                except Exception:
-                                    continue
-                        if not bold_font_name:
-                            # fallback to same font for bold if no bold file found
-                            bold_font_name = base_font_name
-                        break
+                        img_path_str = str(item.product_image).strip()
+                        
+                        # Handle media URLs - convert /media/products/... to absolute path
+                        if img_path_str.startswith('/media/'):
+                            img_path_str = img_path_str[1:]  # Remove leading slash
+                        elif img_path_str.startswith('media/'):
+                            pass  # Already correct
+                        
+                        # Build full path
+                        img_path = os.path.join(settings.BASE_DIR, img_path_str)
+                        
+                        # Try to load image
+                        if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+                            try:
+                                img_cell = Image(img_path, width=0.6*inch, height=0.6*inch)
+                            except Exception:
+                                # If image fails to load, keep default dash
+                                pass
                     except Exception:
-                        continue
-
-            if not base_font_name:
-                base_font_name = 'Helvetica'
-                bold_font_name = 'Helvetica-Bold'
-        except Exception:
-            base_font_name = 'Helvetica'
-            bold_font_name = 'Helvetica-Bold'
-
-        # apply chosen fonts to styles
-        value_style.fontName = base_font_name
-        title_style.fontName = bold_font_name
-        heading_style.fontName = bold_font_name
-        label_style.fontName = bold_font_name
-
-        invoice_info = f"""
-        <b>Invoice #:</b> {order.order_number}<br/>
-        <b>Date:</b> {order.created_at.strftime('%d %B %Y')}<br/>
-        <b>Time:</b> {order.created_at.strftime('%H:%M %p')}
-        """
-
-        # Keep Order Status and Payment Method but remove Payment Status per request
-        order_info = f"""
-        <b>Order Status:</b> {order.get_order_status_display()}<br/>
-        <b>Payment Method:</b> {order.payment_method.upper()}
-        """
-
-        info_data = [
-            [Paragraph(invoice_info, value_style), Paragraph(order_info, value_style)]
-        ]
-        info_table = Table(info_data, colWidths=[3*inch, 3*inch])
-        info_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        elements.append(info_table)
-        elements.append(Spacer(1, 14))
-        
-        # ===== BILLING & SHIPPING SECTION =====
-        # Log invoice generation start
-        try:
-            logger = logging.getLogger(__name__)
-            logger.info("Generating invoice PDF for order %s user=%s", order_number, request.user.username if hasattr(request.user, 'username') else str(request.user))
-        except Exception:
-            pass
-
-        billing_data = [
-            [
-                Paragraph('<b style="font-size: 11; color: #1e293b">BILL TO</b>', styles['Normal']),
-                Paragraph('<b style="font-size: 11; color: #1e293b">SHIP TO</b>', styles['Normal'])
-            ],
-            [
-                Paragraph(
-                    f'<b>{order.user.get_full_name() or order.user.username}</b><br/>'
-                    f'{order.user.email}<br/>'
-                    f'{order.user.userprofile.mobile_number if hasattr(order.user, "userprofile") and order.user.userprofile.mobile_number else "N/A"}',
-                    value_style
-                ),
-                Paragraph((order.shipping_address or '').replace('\n', '<br/>'), value_style)
+                        # Keep default dash if image path processing fails
+                        pass
+                
+                items.append([
+                    img_cell,
+                    Paragraph(item.product_name, styles['Small']),
+                    str(item.quantity),
+                    money(item.product_price),
+                    money(item_total),
+                ])
+            
+            items_table = Table(items, colWidths=[0.7*inch, 2.5*inch, 0.7*inch, 0.9*inch, 0.9*inch])
+            items_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('LINEBELOW', (0, 0), (-1, 0), 0.8, colors.black),
+                ('LINEBELOW', (0, 1), (-1, -1), 0.3, colors.HexColor('#9e9e9e')),
+                ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+                ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
+                ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),
+                ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ]))
+            elements.append(items_table)
+            elements.append(Spacer(1, 14))
+            
+            # Totals
+            tax_percent = (float(order.tax) / float(order.subtotal) * 100) if float(order.subtotal) > 0 else 0.0
+            totals = [
+                ['Subtotal', money(order.subtotal)],
+                [f"Tax ({tax_percent:.0f}%)", money(order.tax)],
+                ['Shipping', money(order.shipping_cost)],
+                ['<b>TOTAL</b>', f'<b>{money(order.total_amount)}</b>'],
             ]
-        ]
-        billing_table = Table(billing_data, colWidths=[3*inch, 3*inch])
-        billing_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f8fafc')),
-            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#e2e8f0')),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(billing_table)
-        elements.append(Spacer(1, 14))
-        
-        # ===== ITEMS TABLE ===== (with product image and name combined)
-        items_data = [[ 'Product', 'Qty', 'Unit Price', 'Total' ]]
-
-        for item in order_items:
-            item_total = Decimal(str(item.product_price)) * Decimal(str(item.quantity))
-
-            # product image and name cell (merged)
-            product_cell = None
-            img_cell = None
+            totals_table = Table(totals, colWidths=[1.5*inch, 1.0*inch])
+            totals_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -2), 'RIGHT'),
+                ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, -1), (-1, -1), 12),
+                ('LINEABOVE', (0, -1), (-1, -1), 0.8, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            totals_wrap = Table([['', totals_table]], colWidths=[4.0*inch, 2.0*inch])
+            totals_wrap.setStyle(TableStyle([
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ]))
+            elements.append(totals_wrap)
+            elements.append(Spacer(1, 18))
             
-            if item.product_image and str(item.product_image).strip():
-                img_path_str = str(item.product_image).strip()
-                # ignore external URLs
-                if not img_path_str.startswith('http'):
-                    # use MEDIA_ROOT if configured, otherwise fallback to BASE_DIR/media
-                    media_root = getattr(settings, 'MEDIA_ROOT', None) or os.path.join(settings.BASE_DIR, 'media')
-                    # Normalize common prefixes: '/media/', 'media/', or leading '/'
-                    if img_path_str.startswith('/media/'):
-                        img_path_str = img_path_str[len('/media/'):]
-                    elif img_path_str.startswith('media/'):
-                        img_path_str = img_path_str[len('media/'):]
-                    elif img_path_str.startswith('/'):
-                        img_path_str = img_path_str[1:]
-                    img_path = os.path.join(media_root, img_path_str)
-                    if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
-                        # Try to load image with PIL (with AVIF support via pillow-heif)
-                        try:
-                            from PIL import Image as PILImage
-                            # Open image to verify it's readable
-                            with open(img_path, 'rb') as f:
-                                test_img = PILImage.open(f)
-                                test_img.load()  # Force load to catch errors
-                            # Image is readable, use it
-                            img_cell = Image(img_path, width=0.5*inch, height=0.5*inch)
-                        except Exception:
-                            # Image format not supported, show dash
-                            img_cell = None
+            # Thank you message
+            elements.append(Paragraph('<b>Thank you for your purchase!</b>', styles['Body']))
+            elements.append(Spacer(1, 12))
             
-            # Create product cell with image (if available) and name
-            if img_cell:
-                # Use a nested table: image on left, name on right
-                from reportlab.platypus import Table as NestedTable, TableStyle as NestedTableStyle
-                product_inner_data = [[img_cell, Paragraph(item.product_name[:35], value_style)]]
-                product_nested = NestedTable(product_inner_data, colWidths=[0.55*inch, 2.45*inch])
-                product_nested.setStyle(NestedTableStyle([
-                    ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-                    ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                product_cell = product_nested
-            else:
-                # No image, just show name
-                product_cell = Paragraph(item.product_name[:40], value_style)
-
-            items_data.append([
-                product_cell,
-                str(item.quantity),
-                f"Rs.{float(item.product_price):.2f}",
-                f"Rs.{float(item_total):.2f}",
-            ])
-
-        items_table = Table(items_data, colWidths=[3.0*inch, 0.6*inch, 1.0*inch, 1.0*inch])
-        items_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f8fafc')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1e293b')),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), bold_font_name),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
-            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#e2e8f0')),
-            ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
-            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 1), (1, -1), 'CENTER'),
-            ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
-            ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('TOPPADDING', (0, 1), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-            ('LINEBELOW', (0, 1), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-        ]))
-        elements.append(items_table)
-        elements.append(Spacer(1, 12))
+            # Payment information
+            payment_status = "Paid" if order.payment_status == 'PAID' else "Pending"
+            payment_block = Paragraph(
+                f'<b>PAYMENT INFORMATION</b><br/>'
+                f'Method: {order.payment_method.upper()}<br/>'
+                f'Status: {payment_status}<br/>'
+                f'Order Status: {order.get_order_status_display()}',
+                styles['Small']
+            )
+            
+            signature_name = order.shipping_address.split('\n')[0] if order.shipping_address else 'Customer'
+            signature_block = Paragraph(
+                f"<b>{signature_name}</b>",
+                styles['Small']
+            )
+            signature_cell = logo_secondary if logo_secondary else signature_block
+            
+            payment_table = Table([[payment_block, signature_cell]], colWidths=[3.5*inch, 2.5*inch])
+            payment_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+            ]))
+            elements.append(payment_table)
+            
+            # Build PDF
+            doc.build(elements)
+            pdf = buffer.getvalue()
+            buffer.close()
+            return pdf
         
-        # ===== TOTALS SECTION =====
-        tax_amount = float(order.tax)
-        subtotal = float(order.subtotal)
-        shipping = float(order.shipping_cost)
-        total = float(order.total_amount)
+        # Try to generate PDF with rupees, fallback to ASCII
+        try:
+            pdf_data = build_invoice('₹')
+        except UnicodeEncodeError:
+            try:
+                pdf_data = build_invoice('Rs.')
+            except Exception as inner_e:
+                import traceback
+                error_msg = f'Error generating PDF: {str(inner_e)}'
+                print(f"PDF Generation Error: {error_msg}")
+                print(traceback.format_exc())
+                messages.error(request, error_msg)
+                return redirect('order_list')
+        except Exception as e:
+            import traceback
+            error_msg = f'Error generating PDF: {str(e)}'
+            print(f"PDF Generation Error: {error_msg}")
+            print(traceback.format_exc())
+            messages.error(request, error_msg)
+            return redirect('order_list')
         
-        totals_data = [
-            ['Subtotal', '', f'Rs.{subtotal:.2f}'],
-            ['Tax', '', f'Rs.{tax_amount:.2f}'],
-            ['Shipping', '', f'Rs.{shipping:.2f}'],
-            ['TOTAL', '', f'Rs.{total:.2f}'],
-        ]
-        
-        totals_table = Table(totals_data, colWidths=[2.5*inch, 1.5*inch, 2.0*inch])
-        totals_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-            ('FONTSIZE', (0, 0), (-1, 2), 9),
-            ('FONTSIZE', (0, 3), (-1, 3), 11),
-            ('FONTNAME', (0, 0), (-1, 2), base_font_name),
-            ('FONTNAME', (0, 3), (-1, 3), bold_font_name),
-            ('TOPPADDING', (0, 0), (-1, 2), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 2), 8),
-            ('TOPPADDING', (0, 3), (-1, 3), 12),
-            ('BOTTOMPADDING', (0, 3), (-1, 3), 12),
-            ('LINEABOVE', (0, 3), (-1, 3), 2, colors.HexColor('#1e293b')),
-            ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#f8fafc')),
-            ('TEXTCOLOR', (0, 0), (-1, 2), colors.HexColor('#475569')),
-            ('TEXTCOLOR', (0, 3), (-1, 3), colors.HexColor('#1e293b')),
-        ]))
-        elements.append(totals_table)
-        elements.append(Spacer(1, 16))
-        
-        # ===== NOTES SECTION =====
-        elements.append(Paragraph('<b style="font-size: 10; color: #1e293b">ORDER NOTES</b>', styles['Normal']))
-        elements.append(Spacer(1, 6))
-        
-        notes_text = f"""
-        <font size="9" color="#475569">
-        <b>Customer Notes:</b> {order.customer_notes or 'No special notes'}<br/><br/>
-        Thank you for your purchase! Your order is being processed and will be shipped soon.
-        </font>
-        """
-        elements.append(Paragraph(notes_text, value_style))
-        elements.append(Spacer(1, 12))
-        
-        # ===== FOOTER =====
-        footer_text = f"""
-        <font size="8" color="#64748b">
-        <b>VibeMall © 2026</b> | Invoice #{order.order_number} | Generated on {order.created_at.strftime('%d %b %Y at %H:%M')}
-        </font>
-        """
-        elements.append(Paragraph(footer_text, styles['Normal']))
-        
-        # Build PDF
-        doc.build(elements)
-        pdf_data = buffer.getvalue()
-        buffer.close()
-        
-        # Return PDF with proper headers
+        # Return PDF
         response = HttpResponse(pdf_data, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="Invoice_{order.order_number}.pdf"'
-        response['Content-Length'] = len(pdf_data)
-        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response['Pragma'] = 'no-cache'
-        response['Expires'] = '0'
         return response
         
+    except ImportError as ie:
+        messages.error(request, 'PDF library not installed. Please contact administrator.')
+        return redirect('order_list')
     except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.exception("Error generating invoice for %s: %s", order_number, str(e))
-        # Return error response without trying to use messages
-        return HttpResponse('Error generating invoice. Please contact support.', status=500)
+        messages.error(request, f'Unexpected error: {str(e)}')
+        return redirect('order_list')
