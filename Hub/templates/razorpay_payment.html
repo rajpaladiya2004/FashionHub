@@ -2,7 +2,7 @@
 
 {% load static %}
 
-{% block title %}Payment - FashionHub{% endblock %}
+{% block title %}Payment - VibeMall{% endblock %}
 
 {% block content %}
 
@@ -67,7 +67,7 @@ payBtn.onclick = function(e){
         key: "{{ razorpay_key }}",
         amount: {{ order_amount }}, // paise
         currency: "INR",
-        name: "FashionHub",
+        name: "VibeMall",
         description: "Order #{{ order.order_number }}",
         order_id: "{{ order.razorpay_order_id }}",
         prefill: {

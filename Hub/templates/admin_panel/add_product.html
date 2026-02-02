@@ -71,13 +71,9 @@
                             <label class="form-label" for="category">Category</label>
                             <select id="category" name="category" class="form-select">
                                 <option value="">Select Category</option>
-                                <option value="TOP_DEALS">Top Deals</option>
-                                <option value="TOP_SELLING">Top Selling</option>
-                                <option value="TOP_FEATURED">Top Featured</option>
-                                <option value="RECOMMENDED">Recommended</option>
-                                <option value="MEN">Men</option>
-                                <option value="WOMEN">Women</option>
-                                <option value="KIDS">Kids</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.category_key }}">{{ category.name }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-6">

@@ -1,7 +1,7 @@
 ﻿{% extends "base.html" %}
 {% load static %}
 
-{% block title %}Shop - FashionHub{% endblock %}
+{% block title %}Shop - VibeMall{% endblock %}
 
 {% block content %}
 <style>
@@ -45,13 +45,31 @@
     .filter-form input[type="number"]::-webkit-outer-spin-button,
     .filter-form input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .filter-form input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+    
+    /* Fix breadcrumb separator */
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/" !important;
+        padding: 0 8px;
+        color: #6c757d;
+    }
+    .breadcrumb-item a {
+        color: #0d6efd;
+        text-decoration: none;
+    }
+    .breadcrumb-item a:hover {
+        color: #0a58ca;
+        text-decoration: underline;
+    }
+    .breadcrumb-item.active {
+        color: #6c757d;
+    }
 </style>
 
 <section class="breadcrumb__area box-plr-75 shop-shell pb-10 pt-20">
     <div class="container">
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}success{% endif %} alert-dismissible fade show mb-3" role="alert">
+                <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}success{% endif %} alert-dismissible fade show mb-3 auto-dismiss-alert" role="alert">
                     <i class="fas fa-info-circle"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
@@ -671,6 +689,17 @@
         }
     `;
     document.head.appendChild(animStyle);
+
+    // Auto-dismiss alerts after 7 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        const alerts = document.querySelectorAll('.auto-dismiss-alert');
+        alerts.forEach(function(alert) {
+            setTimeout(function() {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 7000); // 7 seconds
+        });
+    });
 </script>
 
 {% endblock content %}

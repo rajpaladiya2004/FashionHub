@@ -18,7 +18,8 @@ from decimal import Decimal
 from urllib.parse import urlencode
 import logging
 
-from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, ProductStockNotification, BrandPartner
+from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction
+from .email_utils import send_order_confirmation_email, send_order_status_update_email, send_admin_order_notification
 
 # ===== ADMIN PANEL VIEWS =====
 
@@ -357,10 +358,17 @@ def admin_add_product(request):
             old_price = request.POST.get('old_price')
             stock = request.POST.get('stock')
             category = request.POST.get('category')
-            rating = request.POST.get('rating', 0)
-            review_count = request.POST.get('review_count', 0)
-            is_active = request.POST.get('is_active') == 'on'
-            is_top_deal = request.POST.get('is_top_deal') == 'on'
+            
+            # Convert rating and review_count to proper types
+            try:
+                rating = float(request.POST.get('rating', 0)) or 0
+            except (TypeError, ValueError):
+                rating = 0
+            
+            try:
+                review_count = int(float(request.POST.get('review_count', 0))) or 0
+            except (TypeError, ValueError):
+                review_count = 0
             
             # Get new fields
             sku = request.POST.get('sku', '')
@@ -410,6 +418,10 @@ def admin_add_product(request):
                     order=idx,
                     is_active=True
                 )
+
+            # Auto-generate approved reviews if rating/review_count provided
+            if review_count > 0 and rating > 0:
+                generate_auto_reviews(product, review_count, rating, request.user)
             
             messages.success(request, f'Product "{product.name}" added successfully with {len(gallery_images)} gallery images!')
             return redirect('admin_add_product')
@@ -417,7 +429,105 @@ def admin_add_product(request):
         except Exception as e:
             messages.error(request, f'Error adding product: {str(e)}')
     
-    return render(request, 'admin_panel/add_product.html')
+    # Get categories for dropdown
+    categories = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
+    return render(request, 'admin_panel/add_product.html', {'categories': categories})
+
+
+def generate_auto_reviews(product, review_total, target_avg, reviewer_user=None):
+    """Generate approved reviews and rating distribution for a product."""
+    try:
+        review_total = int(review_total)
+    except (TypeError, ValueError):
+        return
+
+    try:
+        target_avg = float(target_avg)
+    except (TypeError, ValueError):
+        return
+
+    if review_total <= 0 or target_avg <= 0:
+        return
+
+    target_avg = max(1.0, min(5.0, target_avg))
+
+    # Gaussian-like weights around average
+    weights = {}
+    for r in range(1, 6):
+        dist = (r - target_avg)
+        weights[r] = pow(2.718281828, -(dist ** 2) / 2)
+
+    weight_sum = sum(weights.values()) or 1
+    raw = {r: (weights[r] / weight_sum) * review_total for r in range(1, 6)}
+
+    counts = {r: int(raw[r]) for r in range(1, 6)}
+    remainder = review_total - sum(counts.values())
+    if remainder > 0:
+        remainders = sorted(
+            [(r, raw[r] - counts[r]) for r in range(1, 6)],
+            key=lambda x: x[1],
+            reverse=True
+        )
+        for r, _ in remainders[:remainder]:
+            counts[r] += 1
+
+    target_sum = int(round(target_avg * review_total))
+    current_sum = sum(r * c for r, c in counts.items())
+
+    while current_sum < target_sum:
+        moved = False
+        for r in range(4, 0, -1):
+            if counts[r] > 0:
+                counts[r] -= 1
+                counts[r + 1] += 1
+                current_sum += 1
+                moved = True
+                if current_sum >= target_sum:
+                    break
+        if not moved:
+            break
+
+    while current_sum > target_sum:
+        moved = False
+        for r in range(2, 6):
+            if counts[r] > 0:
+                counts[r] -= 1
+                counts[r - 1] += 1
+                current_sum -= 1
+                moved = True
+                if current_sum <= target_sum:
+                    break
+        if not moved:
+            break
+
+    if reviewer_user is None:
+        reviewer_user = (
+            User.objects.filter(is_superuser=True).first()
+            or User.objects.filter(is_staff=True).first()
+            or User.objects.first()
+        )
+
+    if reviewer_user is None:
+        return
+
+    reviewer_name = "Admin"
+    reviewer_email = "admin@fashionhub.local"
+    if reviewer_user:
+        reviewer_name = reviewer_user.get_full_name().strip() or reviewer_user.username
+        reviewer_email = reviewer_user.email or reviewer_email
+
+    for r in range(5, 0, -1):
+        for _ in range(counts.get(r, 0)):
+            ProductReview.objects.create(
+                product=product,
+                user=reviewer_user,
+                rating=r,
+                name=reviewer_name,
+                email=reviewer_email,
+                comment="",
+                is_approved=True,
+                is_auto_generated=True
+            )
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
@@ -595,6 +705,7 @@ def admin_edit_product(request, product_id):
     
     context = {
         'product': product,
+        'categories': CategoryIcon.objects.filter(is_active=True).order_by('order', 'id'),
     }
     return render(request, 'admin_panel/edit_product.html', context)
 
@@ -765,6 +876,44 @@ def admin_edit_brand_partner(request, partner_id):
         'partner': partner,
     }
     return render(request, 'admin_panel/edit_brand_partner.html', context)
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_site_settings(request):
+    """Admin Site Settings - Logo, Name, Contact Info"""
+    settings_obj = SiteSettings.get_settings()
+    
+    if request.method == 'POST':
+        settings_obj.site_name = request.POST.get('site_name', 'VibeMall')
+        settings_obj.site_name_html = request.POST.get('site_name_html', '')
+        settings_obj.tagline = request.POST.get('tagline', '')
+        settings_obj.contact_email = request.POST.get('contact_email', 'support@vibemall.com')
+        settings_obj.contact_phone = request.POST.get('contact_phone', '+91 1234567890')
+        settings_obj.facebook_url = request.POST.get('facebook_url', '')
+        settings_obj.instagram_url = request.POST.get('instagram_url', '')
+        settings_obj.twitter_url = request.POST.get('twitter_url', '')
+        settings_obj.youtube_url = request.POST.get('youtube_url', '')
+        
+        # Handle logo uploads
+        if request.FILES.get('site_logo'):
+            settings_obj.site_logo = request.FILES.get('site_logo')
+        
+        if request.FILES.get('site_favicon'):
+            settings_obj.site_favicon = request.FILES.get('site_favicon')
+        
+        if request.FILES.get('admin_logo'):
+            settings_obj.admin_logo = request.FILES.get('admin_logo')
+        
+        settings_obj.save()
+        messages.success(request, 'Site settings updated successfully!')
+        return redirect('admin_site_settings')
+    
+    context = {
+        'settings': settings_obj,
+    }
+    return render(request, 'admin_panel/site_settings.html', context)
+
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
@@ -987,9 +1136,14 @@ def admin_orders(request):
             
             if action in ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED']:
                 # Bulk status update
+                from django.utils import timezone
                 for order in orders:
                     old_status = order.order_status
                     order.order_status = action
+                    # Set delivery_date and payment_status when status changes to DELIVERED
+                    if action == 'DELIVERED' and old_status != 'DELIVERED':
+                        order.delivery_date = timezone.now()
+                        order.payment_status = 'PAID'
                     order.save()
                     # Create status history
                     OrderStatusHistory.objects.create(
@@ -999,8 +1153,8 @@ def admin_orders(request):
                         changed_by=request.user,
                         notes=f"Bulk status update by {request.user.username}"
                     )
-                    # Send email notification to customer
-                    send_order_status_email(order)
+                    # Send email notification to customer with beautiful template
+                    send_order_status_update_email(order, old_status, action)
                 messages.success(request, f"{len(order_ids)} orders updated to {action}")
                 
             elif action == 'delete':
@@ -1023,6 +1177,18 @@ def admin_orders(request):
     payment_filter = request.GET.get('payment', '')
     if payment_filter:
         all_orders = all_orders.filter(order__payment_status=payment_filter)
+    
+    # Approval status filter
+    approval_filter = request.GET.get('approval', '')
+    if approval_filter:
+        all_orders = all_orders.filter(order__approval_status=approval_filter)
+    
+    # Suspicious orders filter
+    suspicious_filter = request.GET.get('suspicious', '')
+    if suspicious_filter == '1':
+        all_orders = all_orders.filter(order__is_suspicious=True)
+    elif suspicious_filter == '0':
+        all_orders = all_orders.filter(order__is_suspicious=False)
     
     # Date range filter
     date_from = request.GET.get('date_from', '')
@@ -1070,6 +1236,12 @@ def admin_orders(request):
     shipped_orders = Order.objects.filter(order_status='SHIPPED').count()
     delivered_orders = Order.objects.filter(order_status='DELIVERED').count()
     cancelled_orders = Order.objects.filter(order_status='CANCELLED').count()
+    
+    # Approval stats
+    pending_approval_orders = Order.objects.filter(approval_status='PENDING_APPROVAL').count()
+    approved_orders = Order.objects.filter(approval_status='APPROVED').count()
+    rejected_orders = Order.objects.filter(approval_status='REJECTED').count()
+    suspicious_orders = Order.objects.filter(is_suspicious=True).count()
     
     # Revenue stats (use Order model, not OrderItem)
     from decimal import Decimal
@@ -1125,6 +1297,8 @@ def admin_orders(request):
         'orders': orders,
         'status_filter': status_filter,
         'payment_filter': payment_filter,
+        'approval_filter': approval_filter,
+        'suspicious_filter': suspicious_filter,
         'search_query': search_query,
         'date_from': date_from,
         'date_to': date_to,
@@ -1138,6 +1312,12 @@ def admin_orders(request):
         'shipped_orders': shipped_orders,
         'delivered_orders': delivered_orders,
         'cancelled_orders': cancelled_orders,
+        
+        # Approval stats
+        'pending_approval_orders': pending_approval_orders,
+        'approved_orders': approved_orders,
+        'rejected_orders': rejected_orders,
+        'suspicious_orders': suspicious_orders,
         
         # Revenue
         'total_revenue': total_revenue,
@@ -1165,9 +1345,14 @@ def admin_order_details(request, order_id):
         action = request.POST.get('action')
         
         if action == 'update_status':
+            from django.utils import timezone
             old_status = order.order_status
             new_status = request.POST.get('new_status')
             order.order_status = new_status
+            # Set delivery_date and payment_status when status changes to DELIVERED
+            if new_status == 'DELIVERED' and old_status != 'DELIVERED':
+                order.delivery_date = timezone.now()
+                order.payment_status = 'PAID'
             order.save()
             
             # Create status history
@@ -1179,8 +1364,8 @@ def admin_order_details(request, order_id):
                 notes=request.POST.get('status_notes', '')
             )
             
-            # Send email notification
-            send_order_status_email(order)
+            # Send email notification with beautiful template
+            send_order_status_update_email(order, old_status, new_status)
             messages.success(request, f'Order status updated to {new_status}')
             
         elif action == 'add_tracking':
@@ -1191,7 +1376,7 @@ def admin_order_details(request, order_id):
             
         elif action == 'update_payment':
             old_payment_status = order.payment_status
-            new_payment_status = request.POST.get('new_payment_status')
+            new_payment_status = request.POST.get('new_payment_status') or request.POST.get('payment_status')
             order.payment_status = new_payment_status
             order.save()
             messages.success(request, f'Payment status updated to {order.get_payment_status_display()}')
@@ -1211,6 +1396,245 @@ def admin_order_details(request, order_id):
         'status_history': status_history,
     }
     return render(request, 'admin_panel/order_details.html', context)
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_api_search_orders(request):
+    """Dynamic order search for admin navbar (order ID / number)."""
+    from django.http import JsonResponse
+    from django.db.models import Q
+    from django.urls import reverse
+
+    query = (request.GET.get('q') or '').strip()
+    if not query:
+        return JsonResponse({'results': []})
+
+    orders = Order.objects.select_related('user').filter(
+        Q(order_number__icontains=query)
+    )
+
+    if query.isdigit():
+        orders = orders | Order.objects.select_related('user').filter(id=int(query))
+
+    orders = orders.order_by('-created_at')[:10]
+
+    results = []
+    for order in orders:
+        customer_name = f"{order.user.first_name} {order.user.last_name}".strip() or order.user.username
+        results.append({
+            'id': order.id,
+            'order_number': order.order_number,
+            'customer': customer_name,
+            'total_amount': float(order.total_amount),
+            'order_status': order.order_status,
+            'payment_status': order.payment_status,
+            'created_at': order.created_at.strftime('%d %b %Y, %I:%M %p'),
+            'detail_url': reverse('admin_order_details', args=[order.id]),
+        })
+
+    return JsonResponse({'results': results})
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_api_search_orders(request):
+    """Dynamic order search for admin navbar (order ID / number)."""
+    from django.http import JsonResponse
+    from django.db.models import Q
+    from django.urls import reverse
+
+    query = (request.GET.get('q') or '').strip()
+    if not query:
+        return JsonResponse({'results': []})
+
+    orders = Order.objects.select_related('user').filter(
+        Q(order_number__icontains=query)
+    )
+
+    if query.isdigit():
+        orders = orders | Order.objects.select_related('user').filter(id=int(query))
+
+    orders = orders.order_by('-created_at')[:10]
+
+    results = []
+    for order in orders:
+        customer_name = f"{order.user.first_name} {order.user.last_name}".strip() or order.user.username
+        results.append({
+            'id': order.id,
+            'order_number': order.order_number,
+            'customer': customer_name,
+            'total_amount': float(order.total_amount),
+            'order_status': order.order_status,
+            'payment_status': order.payment_status,
+            'created_at': order.created_at.strftime('%d %b %Y, %I:%M %p'),
+            'detail_url': reverse('admin_order_details', args=[order.id]),
+        })
+
+    return JsonResponse({'results': results})
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_approve_order(request, order_id):
+    """Approve a pending order"""
+    order = get_object_or_404(Order, id=order_id)
+    
+    if order.approval_status != 'PENDING_APPROVAL':
+        messages.warning(request, 'Order is not pending approval.')
+        return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
+    
+    # Update approval status
+    from django.utils import timezone
+    order.approval_status = 'APPROVED'
+    order.approved_by = request.user
+    order.approved_at = timezone.now()
+    order.order_status = 'PROCESSING'
+    
+    # Add approval notes if provided
+    if request.method == 'POST':
+        notes = request.POST.get('approval_notes', '')
+        if notes:
+            order.approval_notes = notes
+    else:
+        order.approval_notes = f'Manually approved by {request.user.username}'
+    
+    order.save()
+    
+    # Send approval email to customer
+    try:
+        from django.template.loader import render_to_string
+        from django.core.mail import EmailMultiAlternatives
+        
+        subject = f'Order Approved - {order.order_number}'
+        
+        # Get site URL
+        site_url = request.build_absolute_uri('/').rstrip('/')
+        
+        # Render HTML email
+        html_content = render_to_string('emails/order_approved.html', {
+            'order': order,
+            'approved_by': request.user.get_full_name() or request.user.username,
+            'site_url': site_url,
+        })
+        
+        # Plain text version
+        text_content = f'''
+        Dear {order.user.get_full_name() or order.user.username},
+        
+        Good news! Your order {order.order_number} has been approved and is now being processed.
+        
+        Order Details:
+        - Order Number: {order.order_number}
+        - Total Amount: ₹{order.total_amount}
+        - Status: Processing
+        
+        Thank you for shopping with us!
+        
+        Best regards,
+        FashioHub Team
+        '''
+        
+        # Send email
+        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        
+    except Exception as e:
+        print(f'Email sending failed: {e}')
+    
+    messages.success(request, f'Order {order.order_number} approved successfully!')
+    return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_reject_order(request, order_id):
+    """Reject a pending order"""
+    order = get_object_or_404(Order, id=order_id)
+    
+    if order.approval_status != 'PENDING_APPROVAL':
+        messages.warning(request, 'Order is not pending approval.')
+        return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
+    
+    # Get rejection reason from POST
+    if request.method == 'POST':
+        rejection_reason = request.POST.get('rejection_reason', '')
+        additional_notes = request.POST.get('additional_notes', '')
+        
+        if not rejection_reason:
+            messages.error(request, 'Please select a rejection reason.')
+            return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
+        
+        # Combine reason and notes
+        full_rejection_message = rejection_reason
+        if additional_notes:
+            full_rejection_message += f"\n\nAdditional Notes: {additional_notes}"
+    else:
+        full_rejection_message = 'Order rejected by admin'
+    
+    # Update approval status
+    from django.utils import timezone
+    order.approval_status = 'REJECTED'
+    order.approved_by = request.user
+    order.approved_at = timezone.now()
+    order.order_status = 'CANCELLED'
+    order.approval_notes = f'Rejected by {request.user.username}.\n\nReason: {full_rejection_message}'
+    order.save()
+    
+    # Send rejection email to customer
+    try:
+        from django.template.loader import render_to_string
+        from django.core.mail import EmailMultiAlternatives
+        
+        subject = f'Order Rejected - {order.order_number}'
+        
+        # Format reason for email (remove emojis)
+        reason_display = rejection_reason
+        if '🚫' in rejection_reason or '📦' in rejection_reason or '🚨' in rejection_reason:
+            reason_display = rejection_reason.split(' ', 1)[-1] if ' ' in rejection_reason else rejection_reason
+        
+        # Render HTML email
+        html_content = render_to_string('emails/order_rejected.html', {
+            'order': order,
+            'rejection_reason': reason_display,
+            'additional_notes': additional_notes if request.method == 'POST' else '',
+        })
+        
+        # Plain text version
+        text_content = f'''
+Dear {order.user.get_full_name() or order.user.username},
+
+We regret to inform you that your order {order.order_number} could not be processed and has been cancelled.
+
+Reason: {reason_display}
+{f"Additional Information: {additional_notes}" if additional_notes else ""}
+
+Order Details:
+- Order Number: {order.order_number}
+- Total Amount: ₹{order.total_amount}
+- Status: Cancelled
+
+If you have any questions or concerns, please contact our customer support.
+
+We apologize for any inconvenience caused and hope to serve you better in the future.
+
+Thank you for your understanding.
+
+Best regards,
+FashioHub Team
+        '''
+        
+        # Send email
+        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        
+    except Exception as e:
+        print(f'Email sending failed: {e}')
+    
+    messages.warning(request, f'Order {order.order_number} rejected. Reason: {rejection_reason}')
+    return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
 
 
 @login_required(login_url='login')
@@ -1792,7 +2216,7 @@ def admin_customer_details(request, customer_id):
         'icon': 'bx bx-user-plus',
         'color': 'success',
         'title': 'Account Created',
-        'description': 'Joined FashionHub',
+        'description': 'Joined VibeMall',
         'timestamp': customer.date_joined
     })
     
@@ -1868,9 +2292,34 @@ def index(request):
     # Get wishlist product IDs for logged-in user
     wishlist_product_ids = []
     cart_product_ids = []
+    delivered_orders = []
+    
     if request.user.is_authenticated:
         wishlist_product_ids = list(Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True))
         cart_product_ids = list(Cart.objects.filter(user=request.user).values_list('product_id', flat=True))
+        
+        # Check for recently delivered orders (delivered in last 7 days without reviews)
+        from datetime import timedelta
+        from django.utils import timezone
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        
+        # Get delivered orders that don't have review notification shown
+        shown_review_notifications = request.session.get('shown_review_notifications', [])
+        
+        delivered_orders = Order.objects.filter(
+            user=request.user,
+            order_status='DELIVERED',
+            delivery_date__gte=seven_days_ago
+        ).exclude(
+            order_number__in=shown_review_notifications
+        ).prefetch_related('items__product')[:3]  # Show up to 3 recent delivered orders
+        
+        # Mark these orders as shown
+        if delivered_orders:
+            for order in delivered_orders:
+                shown_review_notifications.append(order.order_number)
+            request.session['shown_review_notifications'] = shown_review_notifications
+            request.session.modified = True
 
     return render(
         request,
@@ -1888,6 +2337,7 @@ def index(request):
             'wishlist_product_ids': wishlist_product_ids,
             'cart_product_ids': cart_product_ids,
             'brand_partners': brand_partners,
+            'delivered_orders': delivered_orders,
         }
     )
 
@@ -2001,6 +2451,13 @@ def checkout(request):
         payment_method = request.POST.get('payment_method', 'COD')
         customer_notes = request.POST.get('customer_notes', '')
         is_resell = request.POST.get('is_resell') == 'on'
+        
+        # Loyalty points redemption
+        redeem_points = request.POST.get('redeem_points') == 'on'
+        points_to_redeem = 0
+        if redeem_points:
+            points_to_redeem = int(request.POST.get('points_to_redeem', 0))
+        
         # Debug: Show selected payment method
         print(f"[DEBUG] Selected payment method: {payment_method}")
         if not payment_method or payment_method not in ['COD', 'RAZORPAY']:
@@ -2039,7 +2496,27 @@ def checkout(request):
             subtotal = Decimal(str(total_price))
             tax = subtotal * Decimal('0.05')  # 5% tax
             shipping_cost = Decimal('0.00') if subtotal > 500 else Decimal('50.00')  # Free shipping above 500
-            total_amount = subtotal + tax + shipping_cost
+            
+            # Apply loyalty points discount (1 point = ₹0.03)
+            points_discount = Decimal('0')
+            if redeem_points and points_to_redeem > 0:
+                # Verify user has enough points
+                loyalty_account = LoyaltyPoints.objects.get(user=request.user)
+                if points_to_redeem <= loyalty_account.points_available:
+                    points_discount = Decimal(str(points_to_redeem)) * Decimal('0.03')
+                else:
+                    messages.error(request, 'Insufficient loyalty points')
+                    return render(request, 'checkout.html', {
+                        'cart_items': cart_items,
+                        'total_price': total_price,
+                        'buy_now_item': buy_now_item
+                    })
+            
+            total_amount = subtotal + tax + shipping_cost - points_discount
+            
+            # Ensure total doesn't go negative
+            if total_amount < 0:
+                total_amount = Decimal('0')
             
             # Create shipping address
             shipping_address = f"{first_name} {last_name}\n{address}\n{city}, {state} {postcode}\n{country}"
@@ -2060,16 +2537,31 @@ def checkout(request):
                 resell_from_phone=from_phone if is_resell else ''
             )
             
+            # Store points redemption info for later
+            if redeem_points and points_to_redeem > 0:
+                order.admin_notes += f"\nLoyalty Points Redeemed: {points_to_redeem} points (₹{points_discount} discount)"
+                order.save()
+            
             # Add order items
             if buy_now_item:
                 # From buy_now
                 product = buy_now_item['product']
+                # Build absolute image URL
+                product_image = ''
+                if product.image:
+                    image_url = product.image.url
+                    if not image_url.startswith('http'):
+                        site_url = request.build_absolute_uri('/').rstrip('/')
+                        product_image = f"{site_url}{image_url}"
+                    else:
+                        product_image = image_url
+                
                 OrderItem.objects.create(
                     order=order,
                     product=product,
                     product_name=product.name,
                     product_price=buy_now_item['price'],
-                    product_image=product.image.url if product.image else '',
+                    product_image=product_image,
                     quantity=buy_now_item['quantity']
                 )
                 # Clear buy_now from session
@@ -2077,14 +2569,29 @@ def checkout(request):
             else:
                 # From cart
                 for item in cart_items:
+                    # Build absolute image URL
+                    product_image = ''
+                    if item.product.image:
+                        image_url = item.product.image.url
+                        if not image_url.startswith('http'):
+                            site_url = request.build_absolute_uri('/').rstrip('/')
+                            product_image = f"{site_url}{image_url}"
+                        else:
+                            product_image = image_url
+                    
                     OrderItem.objects.create(
                         order=order,
                         product=item.product,
                         product_name=item.product.name,
                         product_price=item.product.price,
-                        product_image=item.product.image.url if item.product.image else '',
+                        product_image=product_image,
                         quantity=item.quantity
                     )
+            
+            # Redeem loyalty points if applicable
+            if redeem_points and points_to_redeem > 0:
+                loyalty_account = LoyaltyPoints.objects.get(user=request.user)
+                loyalty_account.redeem_points(points_to_redeem, f"Order #{order.order_number} - ₹{points_discount} discount")
             
             # Handle payment
             if payment_method == 'RAZORPAY':
@@ -2096,11 +2603,25 @@ def checkout(request):
                 order.order_status = 'PENDING'
                 order.save()
                 
+                # Auto-process approval (fraud detection & auto-approve)
+                order.auto_process_approval()
+                
                 # Clear cart after successful order
                 if not buy_now_item:
                     Cart.objects.filter(user=request.user).delete()
                 
-                messages.success(request, f'Order placed successfully! Order #: {order.order_number}')
+                # Send order confirmation email to customer
+                send_order_confirmation_email(order)
+                
+                # Send notification email to admin
+                send_admin_order_notification(order, request)
+                
+                # Check if order needs approval
+                if order.approval_status == 'PENDING_APPROVAL':
+                    messages.warning(request, f'Order placed successfully! Order #: {order.order_number}. Your order is pending approval due to security checks.')
+                else:
+                    messages.success(request, f'Order placed successfully! Order #: {order.order_number}')
+                
                 return redirect('order_confirmation', order_id=order.id)
                 
         except Exception as e:
@@ -2114,11 +2635,20 @@ def checkout(request):
     # GET request - Show checkout form
     user_profile = UserProfile.objects.filter(user=request.user).first()
     
+    # Get loyalty account
+    loyalty_account = None
+    if request.user.is_authenticated:
+        try:
+            loyalty_account = LoyaltyPoints.objects.get(user=request.user)
+        except LoyaltyPoints.DoesNotExist:
+            pass
+    
     context = {
         'cart_items': cart_items,
         'total_price': total_price,
         'buy_now_item': buy_now_item,
         'user_profile': user_profile,
+        'loyalty_account': loyalty_account,
         'tax_amount': Decimal(str(total_price)) * Decimal('0.05'),
         'shipping_cost': Decimal('0.00') if Decimal(str(total_price)) > 500 else Decimal('50.00'),
         'final_total': Decimal(str(total_price)) + (Decimal(str(total_price)) * Decimal('0.05')) + (Decimal('0.00') if Decimal(str(total_price)) > 500 else Decimal('50.00'))
@@ -2156,15 +2686,33 @@ def product_details(request, product_id=None):
             in_wishlist = False
             if request.user.is_authenticated:
                 in_wishlist = Wishlist.objects.filter(user=request.user, product=product).exists()
+
+            # Auto-generate reviews for existing products if missing
+            if product.review_count and product.rating:
+                existing_qs = ProductReview.objects.filter(product=product, is_approved=True)
+                existing_count = existing_qs.count()
+                if existing_count < product.review_count:
+                    existing_sum = existing_qs.aggregate(total=Sum('rating'))['total'] or 0
+                    desired_sum = int(round(float(product.rating) * int(product.review_count)))
+                    missing_n = int(product.review_count) - existing_count
+                    if missing_n > 0:
+                        missing_sum = desired_sum - existing_sum
+                        missing_avg = missing_sum / missing_n if missing_n else float(product.rating)
+                        if missing_avg < 1:
+                            missing_avg = 1
+                        if missing_avg > 5:
+                            missing_avg = 5
+                        generate_auto_reviews(product, missing_n, missing_avg, request.user if request.user.is_authenticated else None)
             
             # Get filter and sort parameters
             rating_filter = request.GET.get('rating', 'all')
             sort_by = request.GET.get('sort', 'recent')
             
-            # Get approved reviews for this product
+            # Get approved customer reviews for this product (exclude auto-generated)
             approved_reviews = ProductReview.objects.filter(
                 product=product, 
-                is_approved=True
+                is_approved=True,
+                is_auto_generated=False
             ).select_related('user').prefetch_related('images', 'votes')
             
             # Apply rating filter
@@ -2187,7 +2735,7 @@ def product_details(request, product_id=None):
             
             review_count = approved_reviews.count()
             
-            # Calculate rating breakdown
+            # Calculate rating breakdown (include ALL approved reviews for stats)
             total_reviews = ProductReview.objects.filter(product=product, is_approved=True).count()
             rating_breakdown = {
                 5: ProductReview.objects.filter(product=product, is_approved=True, rating=5).count(),
@@ -2202,7 +2750,7 @@ def product_details(request, product_id=None):
             for rating, count in rating_breakdown.items():
                 rating_percentages[rating] = int((count / total_reviews * 100)) if total_reviews > 0 else 0
             
-            # Calculate average rating
+            # Calculate average rating (include ALL approved reviews for stats)
             avg_rating = ProductReview.objects.filter(
                 product=product, 
                 is_approved=True
@@ -2285,9 +2833,12 @@ def shop(request):
         .annotate(total=Count('id'))
     )
     category_count_map = {item['category']: item['total'] for item in category_counts}
+    
+    # Get categories from CategoryIcon (dynamic admin-managed categories)
+    category_icons = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
     category_data = [
-        (value, label, category_count_map.get(value, 0))
-        for value, label in Product.CATEGORY_CHOICES
+        (cat.category_key, cat.name, category_count_map.get(cat.category_key, 0))
+        for cat in category_icons
     ]
 
     wishlist_product_ids = set()
@@ -2635,24 +3186,37 @@ def submit_review(request, product_id):
         product = Product.objects.get(id=product_id, is_active=True)
         
         rating = int(request.POST.get('rating', 5))
-        name = request.POST.get('name', '').strip()
-        email = request.POST.get('email', '').strip()
         comment = request.POST.get('comment', '').strip()
         
-        if not all([name, email, comment]):
-            messages.error(request, "Please fill in all required fields.")
-            return redirect('product-details', product_id=product_id)
+        # Auto-fill user details if logged in
+        if request.user.is_authenticated:
+            name = request.user.get_full_name() or request.user.username
+            email = request.user.email
+        else:
+            name = request.POST.get('name', '').strip()
+            email = request.POST.get('email', '').strip()
+        
+        # Check if user has purchased this product (verified purchase)
+        is_verified_purchase = False
+        order_id = request.POST.get('order_id')
+        if request.user.is_authenticated and order_id:
+            is_verified_purchase = Order.objects.filter(
+                id=order_id,
+                user=request.user,
+                order_status='DELIVERED',
+                items__product=product
+            ).exists()
         
         # Create review (not approved by default)
         review = ProductReview.objects.create(
             product=product,
-            user=request.user,
+            user=request.user if request.user.is_authenticated else None,
             rating=rating,
             name=name,
             email=email,
             comment=comment,
             is_approved=False,  # Admin must approve
-            is_verified_purchase=False  # TODO: Check if user has purchased
+            is_verified_purchase=is_verified_purchase
         )
         
         # Handle image uploads (up to 5 images)
@@ -2667,7 +3231,8 @@ def submit_review(request, product_id):
     except ValueError:
         messages.error(request, "Invalid rating value")
     
-    return redirect('product-details', product_id=product_id)
+    # Redirect to referrer or homepage
+    return redirect(request.META.get('HTTP_REFERER', 'index'))
 
 
 @login_required
@@ -2798,7 +3363,50 @@ def profile_view(request):
         return redirect('profile')
 
     profile, created = UserProfile.objects.get_or_create(user=request.user)
-    return render(request, 'profile.html', {'profile': profile})
+    
+    # Get loyalty points and transactions
+    loyalty_account, _ = LoyaltyPoints.objects.get_or_create(user=request.user)
+    points_transactions = PointsTransaction.objects.filter(user=request.user).order_by('-created_at')[:10]
+    
+    return render(request, 'profile.html', {
+        'profile': profile,
+        'loyalty_account': loyalty_account,
+        'points_transactions': points_transactions
+    })
+
+
+@login_required(login_url='login')
+def api_profile_stats(request):
+    """Return live profile stats and recent orders."""
+    from django.http import JsonResponse
+    from django.urls import reverse
+
+    user = request.user
+    orders = Order.objects.filter(user=user)
+
+    total_orders = orders.count()
+    delivered_orders = orders.filter(order_status='DELIVERED').count()
+    cancelled_orders = orders.filter(order_status='CANCELLED').count()
+    pending_orders = orders.filter(order_status__in=['PENDING', 'PROCESSING', 'SHIPPED']).count()
+
+    recent_orders = orders.order_by('-created_at')[:5]
+    recent_list = []
+    for order in recent_orders:
+        recent_list.append({
+            'order_number': order.order_number,
+            'status': order.order_status,
+            'total_amount': float(order.total_amount),
+            'created_at': order.created_at.strftime('%d %b %Y'),
+            'detail_url': reverse('order_details', args=[order.order_number]),
+        })
+
+    return JsonResponse({
+        'total_orders': total_orders,
+        'delivered_orders': delivered_orders,
+        'pending_orders': pending_orders,
+        'cancelled_orders': cancelled_orders,
+        'recent_orders': recent_list,
+    })
 
 
 
@@ -2877,16 +3485,47 @@ def add_product(request):
                     is_active=True
                 )
             
+            # Auto-create CategoryIcon if category is selected and doesn't exist
+            if category:
+                category_name = dict(Product.CATEGORY_CHOICES).get(category, category)
+                CategoryIcon.objects.get_or_create(
+                    category_key=category,
+                    defaults={
+                        'name': category_name,
+                        'background_gradient': 'linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%)',
+                        'icon_color': '#1976D2',
+                        'is_active': True,
+                        'order': CategoryIcon.objects.count()
+                    }
+                )
+            
             messages.success(request, f'Product "{product.name}" added successfully with {len(gallery_images)} gallery images!')
             return redirect('add_product')
             
         except Exception as e:
             messages.error(request, f'Error adding product: {str(e)}')
     
-    # Get all products for display
-    products = Product.objects.all().order_by('-id')[:10]
+    # Get filter parameter
+    category_filter = request.GET.get('category', '')
     
-    return render(request, 'add_product.html', {'products': products})
+    # Get all products for display
+    products = Product.objects.all()
+    
+    # Apply category filter if selected
+    if category_filter:
+        products = products.filter(category=category_filter)
+    
+    products = products.order_by('-id')[:30]  # Show last 30 products
+    
+    # Get all available categories from products
+    available_categories = Product.objects.exclude(category__isnull=True).exclude(category='').values_list('category', flat=True).distinct()
+    category_choices = [{'key': cat, 'name': dict(Product.CATEGORY_CHOICES).get(cat, cat)} for cat in available_categories]
+    
+    return render(request, 'add_product.html', {
+        'products': products,
+        'category_choices': category_choices,
+        'selected_category': category_filter
+    })
 
 # ===== AJAX WISHLIST VIEW =====
 
@@ -3285,7 +3924,53 @@ def admin_adjust_rating(request, product_id):
 @require_POST
 def admin_approve_review(request, review_id):
     """Admin Approve Review"""
+    from django.http import JsonResponse
+    
     review = get_object_or_404(ProductReview, id=review_id)
+    
+    # If POST request with edited data (from modal)
+    if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        import json
+        try:
+            data = json.loads(request.body)
+            edited_rating = data.get('rating')
+            edited_comment = data.get('comment')
+            
+            # Validate and update rating
+            if edited_rating and 1 <= int(edited_rating) <= 5:
+                review.rating = int(edited_rating)
+            
+            # Update comment if provided
+            if edited_comment and edited_comment.strip():
+                review.comment = edited_comment.strip()
+            
+            review.is_approved = True
+            review.save()
+            
+            # Update product review count and rating
+            product = review.product
+            product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
+            
+            # Recalculate average rating
+            approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+            if approved_reviews.exists():
+                from django.db.models import Avg
+                avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+                product.rating = round(avg_rating, 1)
+            
+            product.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Review approved successfully!'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': str(e)
+            }, status=400)
+    
+    # Regular approval without editing
     review.is_approved = True
     review.save()
     
@@ -3313,6 +3998,102 @@ def admin_delete_review(request, review_id):
     messages.success(request, 'Review deleted successfully!')
     return redirect('admin_reviews')
 
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_review_details(request, review_id):
+    """Get Review Details as JSON"""
+    from django.http import JsonResponse
+    
+    try:
+        review = get_object_or_404(ProductReview, id=review_id)
+        
+        # Get review images
+        review_images = []
+        for img in review.images.all():
+            review_images.append(request.build_absolute_uri(img.image.url))
+        
+        # Build response data
+        data = {
+            'id': review.id,
+            'product': {
+                'id': review.product.id,
+                'name': review.product.name,
+                'image': request.build_absolute_uri(review.product.image.url) if review.product.image else None,
+            },
+            'user': {
+                'name': review.name,
+                'email': review.email,
+            },
+            'rating': review.rating,
+            'comment': review.comment,
+            'is_verified_purchase': review.is_verified_purchase,
+            'is_approved': review.is_approved,
+            'created_at': review.created_at.strftime('%B %d, %Y at %I:%M %p'),
+            'images': review_images,
+            'helpful_count': review.helpful_count,
+            'not_helpful_count': review.not_helpful_count,
+        }
+        
+        return JsonResponse(data)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_add_review(request, product_id):
+    """Admin Add Review to Product"""
+    from django.http import JsonResponse
+    
+    product = get_object_or_404(Product, id=product_id)
+    
+    if request.method == 'POST':
+        try:
+            # Get admin review details
+            rating = int(request.POST.get('rating', 5))
+            comment = request.POST.get('comment', '').strip()
+            name = request.POST.get('name', request.user.get_full_name() or request.user.username)
+            email = request.POST.get('email', request.user.email)
+            
+            # Validate
+            if not 1 <= rating <= 5:
+                return JsonResponse({'success': False, 'message': 'Rating must be between 1 and 5'}, status=400)
+            
+            # Create review (admin reviews are auto-approved)
+            review = ProductReview.objects.create(
+                product=product,
+                user=request.user,
+                rating=rating,
+                comment=comment,
+                name=name,
+                email=email,
+                is_approved=True,
+                is_verified_purchase=False  # Admin reviews are not verified purchases
+            )
+            
+            # Update product review count and rating
+            product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
+            
+            # Recalculate average rating
+            from django.db.models import Avg
+            approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+            if approved_reviews.exists():
+                avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+                product.rating = round(avg_rating, 1)
+            
+            product.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Review added successfully!',
+                'review_id': review.id
+            })
+        
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=500)
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
+
+
 # ===== ORDER CONFIRMATION & PAYMENT VIEWS =====
 
 @login_required(login_url='login')
@@ -3323,9 +4104,14 @@ def order_confirmation(request, order_id):
     if order.payment_method == 'RAZORPAY' and order.payment_status != 'PAID' and order.payment_status != 'PROCESSING':
         messages.warning(request, 'Please complete your payment to confirm the order.')
         return redirect('razorpay_payment', order_id=order.id)
+    
+    # Calculate loyalty points earned (₹1 = 33 points, 1 point = ₹0.03)
+    loyalty_points_earned = int(order.total_amount * 33)
+    
     context = {
         'order': order,
         'order_items': order.items.all(),
+        'loyalty_points_earned': loyalty_points_earned,
     }
     return render(request, 'order_confirmation.html', context)
 
@@ -3418,12 +4204,24 @@ def razorpay_payment_success(request):
             order.razorpay_signature = signature
             order.save(update_fields=['payment_status', 'order_status', 'razorpay_payment_id', 'razorpay_signature'])
             
+            # Auto-process approval (fraud detection & auto-approve)
+            order.auto_process_approval()
+            
             # Clear cart
             Cart.objects.filter(user=request.user).delete()
             
+            # Send order confirmation email
+            send_order_confirmation_email(order)
+            
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': True, 'redirect': reverse('order_confirmation', args=[order.id])})
-            messages.success(request, 'Payment successful! Your order is being processed.')
+            
+            # Check if order needs approval
+            if order.approval_status == 'PENDING_APPROVAL':
+                messages.warning(request, 'Payment successful! Your order is pending approval due to security checks.')
+            else:
+                messages.success(request, 'Payment successful! Your order is being processed.')
+            
             return redirect('order_confirmation', order_id=order.id)
             
         except Exception as e:
@@ -3447,9 +4245,52 @@ def razorpay_payment_cancel(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
     
     # Update order status
+    from django.utils import timezone
     order.payment_status = 'FAILED'
     order.order_status = 'CANCELLED'
     order.save()
+    
+    # Send cancellation email
+    try:
+        from django.template.loader import render_to_string
+        from django.core.mail import EmailMultiAlternatives
+        
+        subject = f'Order Cancelled - {order.order_number}'
+        
+        # Get site URL
+        site_url = request.build_absolute_uri('/').rstrip('/')
+        
+        # Render HTML email
+        html_content = render_to_string('emails/order_cancelled.html', {
+            'order': order,
+            'cancelled_at': timezone.now(),
+            'site_url': site_url,
+        })
+        
+        # Plain text version
+        text_content = f'''
+Dear {order.user.get_full_name() or order.user.username},
+
+Your order {order.order_number} has been cancelled as per your request.
+
+Order Details:
+- Order Number: {order.order_number}
+- Total Amount: ₹{order.total_amount}
+- Status: Cancelled
+
+Thank you for your understanding.
+
+Best regards,
+FashioHub Team
+        '''
+        
+        # Send email
+        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        
+    except Exception as e:
+        print(f'Email sending failed: {e}')
     
     messages.warning(request, 'Payment was cancelled. You can try again from your orders.')
     return redirect('checkout')
@@ -3642,6 +4483,18 @@ def order_list(request):
     return render(request, 'order_list.html', {'orders': orders})
 
 
+def track_order_page(request):
+    """Order tracking search page"""
+    if request.method == 'POST':
+        order_number = request.POST.get('order_number', '').strip()
+        if order_number:
+            return redirect('order_tracking', order_number=order_number)
+        else:
+            messages.error(request, 'Please enter an order number')
+    
+    return render(request, 'track_order.html')
+
+
 def order_details(request, order_number):
     """Display detailed view of a specific order"""
     if not request.user.is_authenticated:
@@ -3657,6 +4510,90 @@ def order_details(request, order_number):
     except Order.DoesNotExist:
         messages.error(request, 'Order not found')
         return redirect('order_list')
+
+
+def order_tracking(request, order_number):
+    """Display beautiful timeline tracking for a specific order"""
+    if not request.user.is_authenticated:
+        return redirect('login')
+    
+    try:
+        order = Order.objects.get(order_number=order_number, user=request.user)
+        order_items = OrderItem.objects.filter(order=order)
+        return render(request, 'order_tracking.html', {
+            'order': order,
+            'order_items': order_items
+        })
+    except Order.DoesNotExist:
+        messages.error(request, 'Order not found')
+        return redirect('order_list')
+
+
+@login_required(login_url='login')
+@require_POST
+def customer_cancel_order(request, order_id):
+    """Allow customer to cancel their own order (before shipping)"""
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    
+    # Only allow cancellation if order is PENDING or PROCESSING
+    if order.order_status not in ['PENDING', 'PROCESSING', 'PENDING_APPROVAL']:
+        messages.error(request, 'This order cannot be cancelled as it has already been shipped.')
+        return redirect(request.META.get('HTTP_REFERER', 'index'))
+    
+    # Update order status
+    from django.utils import timezone
+    old_status = order.order_status
+    order.order_status = 'CANCELLED'
+    order.approval_notes = f'Customer cancelled order on {timezone.now().strftime("%d %b, %Y at %I:%M %p")}'
+    order.save()
+    
+    # Send cancellation email
+    try:
+        from django.template.loader import render_to_string
+        from django.core.mail import EmailMultiAlternatives
+        
+        subject = f'Order Cancelled - {order.order_number}'
+        
+        # Get site URL
+        site_url = request.build_absolute_uri('/').rstrip('/')
+        
+        # Render HTML email
+        html_content = render_to_string('emails/order_cancelled.html', {
+            'order': order,
+            'cancelled_at': timezone.now(),
+            'site_url': site_url,
+        })
+        
+        # Plain text version
+        text_content = f'''
+Dear {order.user.get_full_name() or order.user.username},
+
+Your order {order.order_number} has been cancelled as per your request.
+
+Order Details:
+- Order Number: {order.order_number}
+- Total Amount: ₹{order.total_amount}
+- Status: Cancelled
+- Cancelled On: {timezone.now().strftime("%d %b, %Y")}
+
+{"A refund will be initiated within 5-7 business days." if order.payment_status == "Paid" else "No payment has been deducted from your account."}
+
+Thank you for your understanding.
+
+Best regards,
+FashioHub Team
+        '''
+        
+        # Send email
+        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [order.user.email])
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        
+    except Exception as e:
+        print(f'Email sending failed: {e}')
+    
+    messages.success(request, f'Order {order.order_number} has been cancelled successfully.')
+    return redirect(request.META.get('HTTP_REFERER', 'index'))
 
 
 @login_required(login_url='login')
@@ -3747,7 +4684,7 @@ def download_invoice(request, order_number):
         # ===== HEADER SECTION =====
         header_data = [
             [
-                Paragraph('<b>FashionHub</b>', styles['Heading2']),
+                Paragraph('<b>VibeMall</b>', styles['Heading2']),
                 Paragraph(f'<b style="font-size: 18">INVOICE</b>', styles['Heading2'])
             ]
         ]
@@ -4020,7 +4957,7 @@ def download_invoice(request, order_number):
         # ===== FOOTER =====
         footer_text = f"""
         <font size="8" color="#64748b">
-        <b>FashionHub © 2026</b> | Invoice #{order.order_number} | Generated on {order.created_at.strftime('%d %b %Y at %H:%M')}
+        <b>VibeMall © 2026</b> | Invoice #{order.order_number} | Generated on {order.created_at.strftime('%d %b %Y at %H:%M')}
         </font>
         """
         elements.append(Paragraph(footer_text, styles['Normal']))

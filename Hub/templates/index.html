@@ -3,7 +3,7 @@
 {% load static %}
 {% load hub_filters %}
 
-{% block title %}Home-FashionHub{% endblock %}
+{% block title %}Home - VibeMall{% endblock %}
 
 {% block content %}
 
@@ -108,7 +108,11 @@
             <div class="col-xl col-lg col-md-2 col-sm-3 col-4">
                 <a href="{% url 'shop' %}?category={{ category.category_key }}" class="category__item text-center mb-20" style="display: block; text-decoration: none;">
                     <div class="category__icon" style="background: {{ category.background_gradient }}; padding: 15px; border-radius: 10px; margin-bottom: 8px;">
-                        <i class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                        {% if category.icon_image %}
+                            <img src="{{ category.icon_image.url }}" alt="{{ category.name }}" style="width: 32px; height: 32px; object-fit: contain;">
+                        {% elif category.icon_class %}
+                            <i class="{{ category.icon_class }}" style="font-size: 24px; color: {{ category.icon_color }};"></i>
+                        {% endif %}
                     </div>
                     <h6 style="color: #333; font-weight: 600; font-size: 12px;">{{ category.name }}</h6>
                 </a>
@@ -1399,6 +1403,187 @@ if (typeof Swiper !== 'undefined' && document.querySelector('.brand-slider')) {
     });
 }
 </script>
+{% endif %}
+
+<!-- Delivered Order Review Modal -->
+{% if delivered_orders %}
+<div class="modal fade" id="reviewModal" tabindex="-1" aria-labelledby="reviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 15px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px 15px 0 0; padding: 25px;">
+                <h5 class="modal-title" id="reviewModalLabel" style="font-size: 22px; font-weight: 700;">
+                    <i class="fas fa-star" style="color: #ffd700; margin-right: 10px;"></i>
+                    Your Order Has Been Delivered! 🎉
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 30px;">
+                <p style="font-size: 16px; color: #333; margin-bottom: 25px; text-align: center;">
+                    We hope you love your purchase! Please take a moment to share your experience.
+                </p>
+                
+                {% for order in delivered_orders %}
+                <div class="delivered-order-card" style="background: #f8f9fa; border-radius: 12px; padding: 20px; margin-bottom: 20px; border-left: 4px solid #28a745;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <div>
+                            <h6 style="margin: 0; color: #333; font-weight: 600;">Order #{{ order.order_number }}</h6>
+                            <small style="color: #6c757d;">Delivered on {{ order.delivery_date|date:"F d, Y" }}</small>
+                        </div>
+                        <span class="badge bg-success" style="font-size: 12px; padding: 6px 12px;">
+                            <i class="fas fa-check-circle"></i> Delivered
+                        </span>
+                    </div>
+                    
+                    <div class="products-list" style="margin-top: 15px;">
+                        {% for item in order.items.all %}
+                        <div class="product-item" style="padding: 12px; background: white; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e0e0;">
+                            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                                <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; margin-right: 15px;">
+                                <div style="flex: 1;">
+                                    <h6 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">{{ item.product.name }}</h6>
+                                    <small style="color: #6c757d;">Quantity: {{ item.quantity }}</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Review Form -->
+                            <form method="POST" action="{% url 'submit_review' item.product.id %}" enctype="multipart/form-data" class="review-form-{{ item.id }}">
+                                {% csrf_token %}
+                                <input type="hidden" name="order_id" value="{{ order.id }}">
+                                
+                                <!-- Star Rating -->
+                                <div style="margin-bottom: 15px;">
+                                    <label style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; display: block;">
+                                        <i class="fas fa-star" style="color: #ffd700;"></i> Your Rating
+                                    </label>
+                                    <div class="star-rating" data-product="{{ item.id }}">
+                                        <input type="radio" name="rating" value="5" id="star5-{{ item.id }}" required>
+                                        <label for="star5-{{ item.id }}">★</label>
+                                        <input type="radio" name="rating" value="4" id="star4-{{ item.id }}">
+                                        <label for="star4-{{ item.id }}">★</label>
+                                        <input type="radio" name="rating" value="3" id="star3-{{ item.id }}">
+                                        <label for="star3-{{ item.id }}">★</label>
+                                        <input type="radio" name="rating" value="2" id="star2-{{ item.id }}">
+                                        <label for="star2-{{ item.id }}">★</label>
+                                        <input type="radio" name="rating" value="1" id="star1-{{ item.id }}">
+                                        <label for="star1-{{ item.id }}">★</label>
+                                    </div>
+                                </div>
+                                
+                                <!-- Review Text -->
+                                <div style="margin-bottom: 15px;">
+                                    <label style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; display: block;">
+                                        <i class="fas fa-comment"></i> Your Review
+                                    </label>
+                                    <textarea name="comment" rows="3" class="form-control" placeholder="Share your experience with this product..." style="font-size: 13px; border-radius: 8px; border: 1px solid #ddd;"></textarea>
+                                </div>
+                                
+                                <!-- Photo Upload -->
+                                <div style="margin-bottom: 15px;">
+                                    <label style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; display: block;">
+                                        <i class="fas fa-camera"></i> Upload Photos (Optional)
+                                    </label>
+                                    <input type="file" name="review_images" accept="image/*" multiple class="form-control" style="font-size: 13px; border-radius: 8px; border: 1px solid #ddd; padding: 8px;">
+                                    <small style="color: #6c757d; font-size: 11px;">You can upload multiple photos</small>
+                                </div>
+                                
+                                <!-- Submit Button -->
+                                <button type="submit" class="btn btn-primary btn-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 20px; padding: 8px 20px; font-size: 13px; width: 100%;">
+                                    <i class="fas fa-paper-plane"></i> Submit Review
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #dee2e6; padding: 20px; border-radius: 0 0 15px 15px;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 20px; padding: 10px 25px;">
+                    Maybe Later
+                </button>
+                <a href="{% url 'profile' %}" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 20px; padding: 10px 25px;">
+                    <i class="fas fa-list"></i> View All Orders
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Notification Banner -->
+<div id="deliveryNotification" style="
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 50px;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-weight: 600;
+    font-size: 16px;
+    opacity: 0;
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+">
+    <i class="fas fa-check-circle" style="font-size: 24px; color: #ffd700;"></i>
+    <span>🎉 Your order has been delivered successfully!</span>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    {% if delivered_orders %}
+    // Show notification banner
+    const notification = document.getElementById('deliveryNotification');
+    setTimeout(function() {
+        notification.style.transform = 'translateX(-50%) translateY(0)';
+        notification.style.opacity = '1';
+    }, 500);
+    
+    // Hide notification after 4 seconds and show modal
+    setTimeout(function() {
+        notification.style.transform = 'translateX(-50%) translateY(-100px)';
+        notification.style.opacity = '0';
+        
+        // Show review modal after notification disappears
+        setTimeout(function() {
+            const reviewModal = new bootstrap.Modal(document.getElementById('reviewModal'));
+            reviewModal.show();
+        }, 600);
+    }, 4000);
+    {% endif %}
+});
+</script>
+
+<style>
+/* Star Rating CSS */
+.star-rating {
+    direction: rtl;
+    display: inline-flex;
+    gap: 5px;
+}
+
+.star-rating input[type="radio"] {
+    display: none;
+}
+
+.star-rating label {
+    font-size: 30px;
+    color: #ddd;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    margin: 0;
+}
+
+.star-rating input[type="radio"]:checked ~ label,
+.star-rating label:hover,
+.star-rating label:hover ~ label {
+    color: #ffd700;
+}
+</style>
 {% endif %}
 
 {% endblock content %}

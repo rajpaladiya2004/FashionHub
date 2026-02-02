@@ -18,9 +18,12 @@ urlpatterns = [
     path('admin-panel/brand-partners/add/', views.admin_add_brand_partner, name='admin_add_brand_partner'),
     path('admin-panel/brand-partners/edit/<int:partner_id>/', views.admin_edit_brand_partner, name='admin_edit_brand_partner'),
     path('admin-panel/brand-partners/delete/<int:partner_id>/', views.admin_delete_brand_partner, name='admin_delete_brand_partner'),
+    path('admin-panel/site-settings/', views.admin_site_settings, name='admin_site_settings'),
     path('admin-panel/reviews/', views.admin_reviews, name='admin_reviews'),
     path('admin-panel/orders/', views.admin_orders, name='admin_orders'),
     path('admin-panel/orders/<int:order_id>/', views.admin_order_details, name='admin_order_details'),
+    path('admin-panel/orders/<int:order_id>/approve/', views.admin_approve_order, name='admin_approve_order'),
+    path('admin-panel/orders/<int:order_id>/reject/', views.admin_reject_order, name='admin_reject_order'),
     path('admin-panel/invoices/', views.admin_invoices, name='admin_invoices'),
     path('admin-panel/invoice-inventory/', views.admin_invoice_inventory, name='admin_invoice_inventory'),
     path('admin-panel/inventory/update-stock/', views.admin_update_inventory, name='admin_update_inventory'),
@@ -37,12 +40,16 @@ urlpatterns = [
     path('admin-panel/questions/', views.admin_questions, name='admin_questions'),
     path('admin-panel/questions/<int:question_id>/approve/', views.admin_approve_question, name='admin_approve_question'),
     path('admin-panel/questions/<int:question_id>/delete/', views.admin_delete_question, name='admin_delete_question'),
+    path('admin-panel/api/orders/search/', views.admin_api_search_orders, name='admin_api_search_orders'),
     path('admin-panel/product/<int:product_id>/adjust-rating/', views.admin_adjust_rating, name='admin_adjust_rating'),
+    path('admin-panel/reviews/<int:review_id>/details/', views.admin_review_details, name='admin_review_details'),
     path('admin-panel/reviews/<int:review_id>/approve/', views.admin_approve_review, name='admin_approve_review'),
     path('admin-panel/reviews/<int:review_id>/delete/', views.admin_delete_review, name='admin_delete_review'),
+    path('admin-panel/product/<int:product_id>/add-review/', views.admin_add_review, name='admin_add_review'),
     
     # Profile
     path('profile/', views.profile_view, name='profile'),
+    path('api/profile/stats/', views.api_profile_stats, name='api_profile_stats'),
     
     # Cart URLs
     path('add-to-cart/', views.add_to_cart, name='add_to_cart'),
@@ -71,8 +78,11 @@ urlpatterns = [
     
     # Order Management URLs
     path('orders/', views.order_list, name='order_list'),
+    path('track-order/', views.track_order_page, name='track_order'),
     path('order/download-invoice/<str:order_number>/', views.download_invoice, name='download_invoice'),
     path('order/<str:order_number>/', views.order_details, name='order_details'),
+    path('order/track/<str:order_number>/', views.order_tracking, name='order_tracking'),
+    path('order/cancel/<int:order_id>/', views.customer_cancel_order, name='customer_cancel_order'),
     
     # Review URLs
     path('product/<int:product_id>/submit-review/', views.submit_review, name='submit_review'),

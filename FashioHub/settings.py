@@ -68,6 +68,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'Hub.context_processors.cart_wishlist_context',
+                'Hub.context_processors.site_settings_context',
             ],
         },
     },
@@ -160,6 +161,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='your_razorpay_key_id')
 RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='your_razorpay_key_secret')
 RAZORPAY_WEBHOOK_SECRET = config('RAZORPAY_WEBHOOK_SECRET', default='your_webhook_secret')
+
+# Site Configuration
+SITE_URL = config('SITE_URL', default='http://127.0.0.1:8000')
+SITE_NAME = 'FashioHub'
 
 # Security Settings for Production
 if not DEBUG:

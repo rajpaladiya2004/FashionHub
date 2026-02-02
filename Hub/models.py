@@ -371,6 +371,7 @@ class ProductReview(models.Model):
     comment = models.TextField()
     is_approved = models.BooleanField(default=False, help_text="Admin must approve before review is publicly visible")
     is_verified_purchase = models.BooleanField(default=False, help_text="User purchased this product")
+    is_auto_generated = models.BooleanField(default=False, help_text="Auto-generated review by system")
     helpful_count = models.PositiveIntegerField(default=0, help_text="Number of helpful votes")
     not_helpful_count = models.PositiveIntegerField(default=0, help_text="Number of not helpful votes")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -390,6 +391,29 @@ class ProductReview(models.Model):
         if total_votes == 0:
             return 0
         return int((self.helpful_count / total_votes) * 100)
+    
+    def save(self, *args, **kwargs):
+        """Override save to auto-update product rating and review count"""
+        super().save(*args, **kwargs)
+        
+        # Update product review count and rating
+        from django.db.models import Avg
+        
+        product = self.product
+        approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+        
+        if approved_reviews.exists():
+            # Update review count
+            product.review_count = approved_reviews.count()
+            
+            # Update average rating
+            avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+            product.rating = round(avg_rating, 1) if avg_rating else 0
+        else:
+            product.review_count = 0
+            product.rating = 0
+        
+        product.save(update_fields=['review_count', 'rating'])
 
 
 class ReviewImage(models.Model):
@@ -545,6 +569,23 @@ class Order(models.Model):
     resell_from_name = models.CharField(max_length=200, blank=True, help_text="Original seller name for resell orders")
     resell_from_phone = models.CharField(max_length=20, blank=True, help_text="Original seller phone for resell orders")
     
+    # Order Approval System
+    APPROVAL_STATUS_CHOICES = [
+        ('PENDING_APPROVAL', 'Pending Approval'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('AUTO_APPROVED', 'Auto Approved'),
+    ]
+    approval_status = models.CharField(max_length=20, choices=APPROVAL_STATUS_CHOICES, default='PENDING_APPROVAL')
+    approval_notes = models.TextField(blank=True, help_text="Admin notes for approval/rejection")
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_orders')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    
+    # Fraud Detection Flags
+    is_suspicious = models.BooleanField(default=False, help_text="Flagged as potentially fraudulent")
+    suspicious_reason = models.TextField(blank=True, help_text="Reason for flagging as suspicious")
+    risk_score = models.IntegerField(default=0, help_text="Fraud risk score (0-100)")
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -589,6 +630,84 @@ class Order(models.Model):
             'REFUNDED': 'info',
         }
         return payment_colors.get(self.payment_status, 'secondary')
+    
+    def calculate_risk_score(self):
+        """Calculate fraud risk score for this order"""
+        risk = 0
+        
+        # High value order (>10000)
+        if self.total_amount > 10000:
+            risk += 30
+        
+        # Very high value (>50000)
+        if self.total_amount > 50000:
+            risk += 40
+        
+        # First time customer
+        user_orders_count = Order.objects.filter(user=self.user).count()
+        if user_orders_count <= 1:
+            risk += 20
+        
+        # Multiple orders same day
+        from django.utils import timezone
+        today_orders = Order.objects.filter(
+            user=self.user,
+            created_at__date=timezone.now().date()
+        ).count()
+        if today_orders > 3:
+            risk += 25
+        
+        # COD for high value
+        if self.payment_method == 'COD' and self.total_amount > 5000:
+            risk += 15
+        
+        return min(risk, 100)  # Cap at 100
+    
+    def check_auto_approval_eligibility(self):
+        """Check if order should be auto-approved"""
+        # Trusted customer (>5 successful orders)
+        successful_orders = Order.objects.filter(
+            user=self.user,
+            order_status='DELIVERED',
+            payment_status='PAID'
+        ).count()
+        
+        if successful_orders >= 5 and self.total_amount < 15000:
+            return True
+        
+        # Low value, paid orders
+        if self.payment_status == 'PAID' and self.total_amount < 5000:
+            return True
+        
+        return False
+    
+    def auto_process_approval(self):
+        """Automatically approve/flag order based on rules"""
+        self.risk_score = self.calculate_risk_score()
+        
+        # Flag suspicious orders
+        if self.risk_score >= 70:
+            self.is_suspicious = True
+            reasons = []
+            if self.total_amount > 50000:
+                reasons.append("Very high order value")
+            if Order.objects.filter(user=self.user).count() <= 1:
+                reasons.append("First time customer")
+            if self.payment_method == 'COD' and self.total_amount > 5000:
+                reasons.append("High value COD order")
+            self.suspicious_reason = ", ".join(reasons)
+            self.approval_status = 'PENDING_APPROVAL'
+        
+        # Auto-approve trusted customers
+        elif self.check_auto_approval_eligibility():
+            self.approval_status = 'AUTO_APPROVED'
+            self.approved_at = timezone.now()
+            self.order_status = 'PROCESSING'
+        
+        else:
+            self.approval_status = 'PENDING_APPROVAL'
+        
+        self.save()
 
 
 class OrderItem(models.Model):
@@ -895,3 +1014,48 @@ class EmailLog(models.Model):
     
     def __str__(self):
         return f"{self.email_type} to {self.email_to}"
+
+
+class SiteSettings(models.Model):
+    """Global site settings - only one instance should exist"""
+    site_name = models.CharField(max_length=100, default='VibeMall', help_text='Website name displayed across the site')
+    site_name_html = models.TextField(blank=True, help_text='Optional styled HTML for brand name (supports multiple colors/fonts)')
+    site_logo = models.ImageField(upload_to='site/', blank=True, null=True, help_text='Main logo (recommended: 150x50px PNG with transparent background)')
+    site_favicon = models.ImageField(upload_to='site/', blank=True, null=True, help_text='Favicon icon (recommended: 32x32px PNG)')
+    tagline = models.CharField(max_length=200, blank=True, help_text='Website tagline/slogan')
+    
+    # Contact Information
+    contact_email = models.EmailField(default='support@vibemall.com')
+    contact_phone = models.CharField(max_length=20, default='+91 1234567890')
+    
+    # Social Media Links
+    facebook_url = models.URLField(blank=True)
+    instagram_url = models.URLField(blank=True)
+    twitter_url = models.URLField(blank=True)
+    youtube_url = models.URLField(blank=True)
+    
+    # Admin Panel Logo
+    admin_logo = models.ImageField(upload_to='site/', blank=True, null=True, help_text='Admin panel logo (recommended: 120x40px)')
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Site Settings'
+        verbose_name_plural = 'Site Settings'
+    
+    def __str__(self):
+        return f"{self.site_name} Settings"
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one instance exists
+        if not self.pk and SiteSettings.objects.exists():
+            # Update existing instance instead of creating new
+            existing = SiteSettings.objects.first()
+            self.pk = existing.pk
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_settings(cls):
+        """Get or create site settings"""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings

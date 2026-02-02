@@ -104,6 +104,70 @@
         </div>
     </div>
 
+    <!-- Approval Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                            <span class="avatar-initial rounded bg-label-warning"><i class='bx bx-time-five'></i></span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block">Pending Approval</small>
+                            <h5 class="mb-0">{{ pending_approval_orders }}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                            <span class="avatar-initial rounded bg-label-success"><i class='bx bx-check-circle'></i></span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block">Approved Orders</small>
+                            <h5 class="mb-0">{{ approved_orders }}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                            <span class="avatar-initial rounded bg-label-danger"><i class='bx bx-x-circle'></i></span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block">Rejected Orders</small>
+                            <h5 class="mb-0">{{ rejected_orders }}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                            <span class="avatar-initial rounded bg-label-danger"><i class='bx bx-error'></i></span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block">Suspicious Orders</small>
+                            <h5 class="mb-0">{{ suspicious_orders }}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Revenue & Profit Cards -->
     <div class="row mb-4">
         <div class="col-lg-3 col-md-6 mb-4">
@@ -194,6 +258,24 @@
                     </select>
                 </div>
                 <div class="col-md-2 mb-3">
+                    <label class="form-label">Approval Status</label>
+                    <select name="approval" class="form-select">
+                        <option value="">All Approval</option>
+                        <option value="PENDING_APPROVAL" {% if approval_filter == 'PENDING_APPROVAL' %}selected{% endif %}>⏳ Pending</option>
+                        <option value="APPROVED" {% if approval_filter == 'APPROVED' %}selected{% endif %}>✅ Approved</option>
+                        <option value="REJECTED" {% if approval_filter == 'REJECTED' %}selected{% endif %}>❌ Rejected</option>
+                        <option value="AUTO_APPROVED" {% if approval_filter == 'AUTO_APPROVED' %}selected{% endif %}>🤖 Auto-Approved</option>
+                    </select>
+                </div>
+                <div class="col-md-2 mb-3">
+                    <label class="form-label">Fraud Filter</label>
+                    <select name="suspicious" class="form-select">
+                        <option value="">All Orders</option>
+                        <option value="1" {% if suspicious_filter == '1' %}selected{% endif %}>🚨 Suspicious Only</option>
+                        <option value="0" {% if suspicious_filter == '0' %}selected{% endif %}>✓ Safe Only</option>
+                    </select>
+                </div>
+                <div class="col-md-2 mb-3">
                     <label class="form-label">Date From</label>
                     <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
                 </div>
@@ -271,11 +353,12 @@
                                 <th>Customer</th>
                                 <th>Contact</th>
                                 <th>Total</th>
+                                <th>Approval</th>
+                                <th>Risk</th>
                                 <th>Status</th>
                                 <th>Payment</th>
                                 <th>Date</th>
-                                <th>Tracking</th>
-                                <th width="100">Actions</th>
+                                <th width="180">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -288,15 +371,23 @@
                                     <div class="d-flex align-items-center gap-2">
                                         {% if item.product_image %}
                                         <img src="{{ item.product_image }}" alt="{{ item.product_name }}" 
-                                             style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px;">
+                                             style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 2px solid #f0f0f0;">
+                                        {% elif item.product and item.product.image %}
+                                        <img src="{{ item.product.image.url }}" alt="{{ item.product_name }}" 
+                                             style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 2px solid #f0f0f0;">
                                         {% else %}
-                                        <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                            <i class='bx bx-package' style="font-size: 22px; color: white;"></i>
+                                        <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                            <i class='bx bx-package' style="font-size: 24px; color: white;"></i>
                                         </div>
                                         {% endif %}
-                                        <div>
-                                            <div style="font-size: 13px; font-weight: 500; color: #566a7f;">{{ item.product_name }}</div>
-                                            <small class="text-muted">₹{{ item.product_price }}</small>
+                                        <div style="max-width: 200px;">
+                                            <div style="font-size: 13px; font-weight: 600; color: #566a7f; margin-bottom: 2px;">
+                                                {{ item.product_name|truncatewords:5 }}
+                                            </div>
+                                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                                <small class="text-muted"><i class='bx bx-purchase-tag'></i> ₹{{ item.product_price }}</small>
+                                                <small class="badge bg-label-primary">Qty: {{ item.quantity }}</small>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
@@ -332,6 +423,40 @@
                                 </td>
                                 <td>
                                     <strong>₹{{ item.subtotal|floatformat:2 }}</strong>
+                                </td>
+                                <td>
+                                    {% if item.order.approval_status == 'PENDING_APPROVAL' %}
+                                    <span class="badge bg-warning">
+                                        ⏳ Pending
+                                    </span>
+                                    {% elif item.order.approval_status == 'APPROVED' %}
+                                    <span class="badge bg-success">
+                                        ✅ Approved
+                                    </span>
+                                    {% elif item.order.approval_status == 'REJECTED' %}
+                                    <span class="badge bg-danger">
+                                        ❌ Rejected
+                                    </span>
+                                    {% elif item.order.approval_status == 'AUTO_APPROVED' %}
+                                    <span class="badge bg-info">
+                                        🤖 Auto
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.order.is_suspicious %}
+                                    <span class="badge bg-danger" title="{{ item.order.suspicious_reason }}">
+                                        🚨 {{ item.order.risk_score }}%
+                                    </span>
+                                    {% elif item.order.risk_score > 50 %}
+                                    <span class="badge bg-warning">
+                                        ⚠️ {{ item.order.risk_score }}%
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-success">
+                                        ✓ Safe
+                                    </span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% if item.order.order_status == 'PENDING' %}
@@ -385,35 +510,120 @@
                                     </div>
                                 </td>
                                 <td>
-                                    {% if item.order.tracking_number %}
-                                    <span class="badge bg-info">{{ item.order.tracking_number }}</span>
-                                    {% if item.order.courier_name %}
-                                    <br><small class="text-muted">{{ item.order.courier_name }}</small>
-                                    {% endif %}
-                                    {% else %}
-                                    <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="dropdown">
-                                        <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                            Actions
+                                    <div class="d-flex gap-1">
+                                        {% if item.order.approval_status == 'PENDING_APPROVAL' %}
+                                        <button type="button" class="btn btn-sm btn-success" title="Approve Order" data-bs-toggle="modal" data-bs-target="#approveModal{{ item.order.id }}">
+                                            <i class='bx bx-check'></i>
                                         </button>
-                                        <ul class="dropdown-menu action-dropdown">
-                                            <li>
-                                                <a class="dropdown-item" href="{% url 'admin_order_details' item.order.id %}">
-                                                    <i class='bx bx-show'></i> View Details
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#customerModal{{ order.id }}">
-                                                    <i class='bx bx-user'></i> Customer Info
-                                                </a>
-                                            </li>
-                                        </ul>
+                                        <button type="button" class="btn btn-sm btn-danger" title="Reject Order" data-bs-toggle="modal" data-bs-target="#rejectModal{{ item.order.id }}">
+                                            <i class='bx bx-x'></i>
+                                        </button>
+                                        {% endif %}
+                                        <a href="{% url 'admin_order_details' item.order.id %}" class="btn btn-sm btn-primary" title="View Details">
+                                            <i class='bx bx-show'></i>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>
+
+                            <!-- Approve Order Modal -->
+                            <div class="modal fade" id="approveModal{{ item.order.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header bg-success text-white">
+                                            <h5 class="modal-title">✅ Approve Order #{{ item.order.order_number }}</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{% url 'admin_approve_order' item.order.id %}">
+                                            {% csrf_token %}
+                                            <div class="modal-body">
+                                                <div class="alert alert-success">
+                                                    <i class='bx bx-check-circle'></i> આ order approve કરો અને processing શરૂ કરો.
+                                                </div>
+                                                
+                                                <div class="card bg-light-success p-3 mb-3">
+                                                    <h6 class="mb-2">Order Details:</h6>
+                                                    <p class="mb-1"><strong>Customer:</strong> {{ item.order.user.get_full_name|default:item.order.user.username }}</p>
+                                                    <p class="mb-1"><strong>Email:</strong> {{ item.order.user.email }}</p>
+                                                    <p class="mb-1"><strong>Total Amount:</strong> ₹{{ item.order.total_amount }}</p>
+                                                    <p class="mb-1"><strong>Payment:</strong> {{ item.order.get_payment_method_display }} - {{ item.order.get_payment_status_display }}</p>
+                                                    {% if item.order.is_suspicious %}
+                                                    <p class="mb-0 text-danger"><strong>⚠️ Risk Score:</strong> {{ item.order.risk_score }}%</p>
+                                                    {% endif %}
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label">Approval Notes (Optional):</label>
+                                                    <textarea name="approval_notes" class="form-control" rows="2" placeholder="Add any notes about this approval..."></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                                    <i class='bx bx-x'></i> Cancel
+                                                </button>
+                                                <button type="submit" class="btn btn-success">
+                                                    <i class='bx bx-check-circle'></i> Confirm Approval
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Reject Order Modal -->
+                            <div class="modal fade" id="rejectModal{{ item.order.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header bg-danger text-white">
+                                            <h5 class="modal-title">❌ Reject Order #{{ item.order.order_number }}</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{% url 'admin_reject_order' item.order.id %}">
+                                            {% csrf_token %}
+                                            <div class="modal-body">
+                                                <div class="alert alert-warning">
+                                                    <i class='bx bx-error-circle'></i> આ order reject કરવાનું confirm કરો. આ action undo નહીં થઈ શકે.
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold">Rejection Reason: <span class="text-danger">*</span></label>
+                                                    <select name="rejection_reason" class="form-select" required>
+                                                        <option value="">-- Select Reason --</option>
+                                                        <option value="Not delivered in your area">🚫 Not delivered in your area</option>
+                                                        <option value="Out of stock">📦 Out of stock</option>
+                                                        <option value="Suspicious order detected">🚨 Suspicious order detected</option>
+                                                        <option value="Payment verification failed">💳 Payment verification failed</option>
+                                                        <option value="Customer requested cancellation">👤 Customer requested cancellation</option>
+                                                        <option value="Duplicate order">🔄 Duplicate order</option>
+                                                        <option value="Invalid address">📍 Invalid address</option>
+                                                        <option value="Other">📝 Other</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label">Additional Notes (Optional):</label>
+                                                    <textarea name="additional_notes" class="form-control" rows="3" placeholder="Add any additional comments..."></textarea>
+                                                </div>
+
+                                                <div class="card bg-light-danger p-3">
+                                                    <h6 class="mb-2">Order Details:</h6>
+                                                    <p class="mb-1"><strong>Customer:</strong> {{ item.order.user.get_full_name|default:item.order.user.username }}</p>
+                                                    <p class="mb-1"><strong>Total Amount:</strong> ₹{{ item.order.total_amount }}</p>
+                                                    <p class="mb-0"><strong>Payment:</strong> {{ item.order.get_payment_method_display }}</p>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                                    <i class='bx bx-x'></i> Cancel
+                                                </button>
+                                                <button type="submit" class="btn btn-danger">
+                                                    <i class='bx bx-error-circle'></i> Confirm Rejection
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
 
                             <!-- Customer Details Modal -->
                             <div class="modal fade" id="customerModal{{ order.id }}" tabindex="-1">

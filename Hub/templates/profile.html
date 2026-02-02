@@ -1,5 +1,5 @@
 ﻿{% extends "base.html" %} {% load static %}
-{% block title%}My Profile - FashionHub{% endblock %}
+{% block title %}My Profile - VibeMall{% endblock %}
 
 {% block content %}
 
@@ -111,6 +111,148 @@
 
             <!-- Right Side - Empty Space or Additional Info -->
             <div class="col-lg-8">
+                <!-- Order Stats Section (Dynamic) -->
+                <div class="profile-details-box border-1 p-40 mb-30" id="profileStatsBox">
+                    <h5 class="mb-30">
+                        <i class="fas fa-chart-line"></i> Order Statistics
+                    </h5>
+
+                    <div class="row mb-30" id="profileStatsCards">
+                        <div class="col-md-3 col-sm-6 mb-20">
+                            <div class="stats-card text-center p-20 bg-light" style="border-radius: 12px;">
+                                <h3 class="mb-5" id="statsTotalOrders">0</h3>
+                                <p class="mb-0" style="font-size: 13px;">Total</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-20">
+                            <div class="stats-card text-center p-20 bg-success text-white" style="border-radius: 12px;">
+                                <h3 class="mb-5 text-white" id="statsDeliveredOrders">0</h3>
+                                <p class="mb-0" style="font-size: 13px;">Delivered</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-20">
+                            <div class="stats-card text-center p-20 bg-warning text-white" style="border-radius: 12px;">
+                                <h3 class="mb-5 text-white" id="statsPendingOrders">0</h3>
+                                <p class="mb-0" style="font-size: 13px;">In Progress</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-20">
+                            <div class="stats-card text-center p-20 bg-danger text-white" style="border-radius: 12px;">
+                                <h3 class="mb-5 text-white" id="statsCancelledOrders">0</h3>
+                                <p class="mb-0" style="font-size: 13px;">Cancelled</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-20">
+                        <i class="fas fa-receipt"></i> Recent Orders
+                    </h6>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead style="background: #f8f9fa;">
+                                <tr>
+                                    <th style="padding: 12px;">Order</th>
+                                    <th style="padding: 12px;">Status</th>
+                                    <th style="padding: 12px;">Amount</th>
+                                    <th style="padding: 12px;">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentOrdersBody">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted" style="padding: 16px;">
+                                        Loading recent orders...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Loyalty Points Section -->
+                <div class="profile-details-box border-1 p-40 mb-30">
+                    <h5 class="mb-30">
+                        <i class="fas fa-star" style="color: #ffc107;"></i> Loyalty Points
+                    </h5>
+
+                    <div class="row mb-30">
+                        <div class="col-md-4 mb-20">
+                            <div class="points-stat-card text-center p-20" style="background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);">
+                                <i class="fas fa-coins" style="font-size: 32px; color: white; margin-bottom: 10px;"></i>
+                                <h3 class="text-white mb-1">{{ loyalty_account.total_points|default:0 }}</h3>
+                                <p class="text-white mb-0" style="font-size: 13px;">Total Earned</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-20">
+                            <div class="points-stat-card text-center p-20" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);">
+                                <i class="fas fa-wallet" style="font-size: 32px; color: white; margin-bottom: 10px;"></i>
+                                <h3 class="text-white mb-1">{{ loyalty_account.points_available|default:0 }}</h3>
+                                <p class="text-white mb-0" style="font-size: 13px;">Available Points</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-20">
+                            <div class="points-stat-card text-center p-20" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);">
+                                <i class="fas fa-gift" style="font-size: 32px; color: white; margin-bottom: 10px;"></i>
+                                <h3 class="text-white mb-1">{{ loyalty_account.points_used|default:0 }}</h3>
+                                <p class="text-white mb-0" style="font-size: 13px;">Points Used</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-20">
+                        <i class="fas fa-history"></i> Transaction History
+                    </h6>
+
+                    {% if points_transactions %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead style="background: #f8f9fa;">
+                                    <tr>
+                                        <th style="padding: 12px;">Date</th>
+                                        <th style="padding: 12px;">Type</th>
+                                        <th style="padding: 12px;">Description</th>
+                                        <th style="padding: 12px; text-align: right;">Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for transaction in points_transactions %}
+                                    <tr>
+                                        <td style="padding: 12px; vertical-align: middle;">
+                                            <small style="color: #6c757d;">{{ transaction.created_at|date:"M d, Y" }}</small><br>
+                                            <small style="color: #adb5bd;">{{ transaction.created_at|time:"h:i A" }}</small>
+                                        </td>
+                                        <td style="padding: 12px; vertical-align: middle;">
+                                            {% if transaction.transaction_type == 'EARNED' %}
+                                                <span class="badge bg-success"><i class="fas fa-plus-circle"></i> Earned</span>
+                                            {% elif transaction.transaction_type == 'REDEEMED' %}
+                                                <span class="badge bg-danger"><i class="fas fa-minus-circle"></i> Redeemed</span>
+                                            {% elif transaction.transaction_type == 'EXPIRED' %}
+                                                <span class="badge bg-warning"><i class="fas fa-clock"></i> Expired</span>
+                                            {% else %}
+                                                <span class="badge bg-info"><i class="fas fa-sync"></i> Adjusted</span>
+                                            {% endif %}
+                                        </td>
+                                        <td style="padding: 12px; vertical-align: middle;">{{ transaction.description }}</td>
+                                        <td style="padding: 12px; vertical-align: middle; text-align: right;">
+                                            {% if transaction.transaction_type == 'EARNED' %}
+                                                <span style="color: #28a745; font-weight: 600;">+{{ transaction.points }}</span>
+                                            {% else %}
+                                                <span style="color: #dc3545; font-weight: 600;">-{{ transaction.points }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No transactions yet. Start earning points by placing orders!
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Account Information -->
                 <div class="profile-details-box border-1 p-40">
                     <h5 class="mb-30">
                         <i class="fas fa-info-circle"></i> Account Information
@@ -417,5 +559,62 @@
     }
 
 </style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const statsTotal = document.getElementById('statsTotalOrders');
+        const statsDelivered = document.getElementById('statsDeliveredOrders');
+        const statsPending = document.getElementById('statsPendingOrders');
+        const statsCancelled = document.getElementById('statsCancelledOrders');
+        const recentBody = document.getElementById('recentOrdersBody');
+
+        fetch('/api/profile/stats/')
+            .then(response => response.json())
+            .then(data => {
+                if (statsTotal) statsTotal.textContent = data.total_orders ?? 0;
+                if (statsDelivered) statsDelivered.textContent = data.delivered_orders ?? 0;
+                if (statsPending) statsPending.textContent = data.pending_orders ?? 0;
+                if (statsCancelled) statsCancelled.textContent = data.cancelled_orders ?? 0;
+
+                if (recentBody) {
+                    const orders = data.recent_orders || [];
+                    if (!orders.length) {
+                        recentBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding: 16px;">No recent orders found.</td></tr>';
+                        return;
+                    }
+
+                    recentBody.innerHTML = orders.map(order => {
+                        const statusClass = order.status === 'DELIVERED'
+                            ? 'bg-success'
+                            : order.status === 'CANCELLED'
+                                ? 'bg-danger'
+                                : 'bg-warning';
+
+                        return `
+                            <tr style="cursor: pointer;" onclick="window.location.href='${order.detail_url}'">
+                                <td style="padding: 12px; vertical-align: middle;">
+                                    <strong>#${order.order_number}</strong>
+                                </td>
+                                <td style="padding: 12px; vertical-align: middle;">
+                                    <span class="badge ${statusClass}">${order.status}</span>
+                                </td>
+                                <td style="padding: 12px; vertical-align: middle;">
+                                    ₹${Number(order.total_amount).toFixed(2)}
+                                </td>
+                                <td style="padding: 12px; vertical-align: middle;">
+                                    ${order.created_at}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            })
+            .catch(() => {
+                if (recentBody) {
+                    recentBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding: 16px;">Unable to load stats right now.</td></tr>';
+                }
+            });
+    });
+</script>
 
 {% endblock content %}

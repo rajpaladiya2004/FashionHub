@@ -307,16 +307,25 @@ class OrderItemInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     """Order Management in Admin Panel"""
-    list_display = ('order_number', 'user_name', 'total_amount', 'payment_status_badge', 'order_status_badge', 'payment_method', 'is_resell_badge', 'created_at')
-    list_filter = ('order_status', 'payment_status', 'payment_method', 'is_resell', 'created_at')
+    list_display = ('order_number', 'user_name', 'total_amount', 'approval_status_badge', 'payment_status_badge', 'order_status_badge', 'payment_method', 'risk_indicator', 'is_resell_badge', 'created_at', 'approval_actions')
+    list_filter = ('approval_status', 'is_suspicious', 'order_status', 'payment_status', 'payment_method', 'is_resell', 'created_at')
     search_fields = ('order_number', 'user__username', 'user__email')
-    readonly_fields = ('order_number', 'created_at', 'updated_at', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature')
+    readonly_fields = ('order_number', 'created_at', 'updated_at', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'risk_score', 'approved_by', 'approved_at')
     date_hierarchy = 'created_at'
     inlines = [OrderItemInline]
+    actions = ['approve_orders', 'reject_orders']
     
     fieldsets = (
         ('📋 ORDER INFO', {
             'fields': ('order_number', 'user', 'created_at', 'updated_at')
+        }),
+        ('✅ APPROVAL STATUS', {
+            'fields': ('approval_status', 'approval_notes', 'approved_by', 'approved_at'),
+            'classes': ('collapse',),
+        }),
+        ('🚨 FRAUD DETECTION', {
+            'fields': ('is_suspicious', 'suspicious_reason', 'risk_score'),
+            'classes': ('collapse',),
         }),
         ('💰 PAYMENT DETAILS', {
             'fields': ('subtotal', 'tax', 'shipping_cost', 'total_amount', 'payment_method', 'payment_status', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature')
@@ -328,7 +337,7 @@ class OrderAdmin(admin.ModelAdmin):
             'fields': ('shipping_address', 'billing_address')
         }),
         ('📝 NOTES', {
-            'fields': ('customer_notes',)
+            'fields': ('customer_notes', 'admin_notes')
         }),
         ('🔄 RESELL', {
             'fields': ('is_resell',)
@@ -338,6 +347,52 @@ class OrderAdmin(admin.ModelAdmin):
     def user_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
     user_name.short_description = 'Customer'
+    
+    def approval_status_badge(self, obj):
+        colors = {
+            'PENDING_APPROVAL': '#ff9800',
+            'APPROVED': '#4caf50',
+            'REJECTED': '#f44336',
+            'AUTO_APPROVED': '#2196f3',
+        }
+        icons = {
+            'PENDING_APPROVAL': '⏳',
+            'APPROVED': '✅',
+            'REJECTED': '❌',
+            'AUTO_APPROVED': '🤖',
+        }
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 3px;">{} {}</span>',
+            colors.get(obj.approval_status, '#999'),
+            icons.get(obj.approval_status, ''),
+            obj.get_approval_status_display()
+        )
+    approval_status_badge.short_description = 'Approval'
+    
+    def risk_indicator(self, obj):
+        if obj.is_suspicious:
+            return format_html(
+                '<span style="background-color: #f44336; color: white; padding: 5px 10px; border-radius: 3px;" title="{}">🚨 Risk: {}%</span>',
+                obj.suspicious_reason,
+                obj.risk_score
+            )
+        elif obj.risk_score > 50:
+            return format_html(
+                '<span style="background-color: #ff9800; color: white; padding: 5px 10px; border-radius: 3px;">⚠️ {}%</span>',
+                obj.risk_score
+            )
+        return format_html('<span style="color: #4caf50;">✓ Safe</span>')
+    risk_indicator.short_description = 'Risk'
+    
+    def approval_actions(self, obj):
+        if obj.approval_status == 'PENDING_APPROVAL':
+            return format_html(
+                '<a class="button" href="/admin-panel/orders/{}/approve/" style="background-color: #4caf50; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none; margin-right: 5px;">✅ Approve</a>'
+                '<a class="button" href="/admin-panel/orders/{}/reject/" style="background-color: #f44336; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none;">❌ Reject</a>',
+                obj.id, obj.id
+            )
+        return '-'
+    approval_actions.short_description = 'Actions'
     
     def payment_status_badge(self, obj):
         colors = {
@@ -349,7 +404,7 @@ class OrderAdmin(admin.ModelAdmin):
         return format_html(
             '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 3px;">{}</span>',
             colors.get(obj.payment_status, '#999'),
-            obj.get_payment_status_color()
+            obj.get_payment_status_display()
         )
     payment_status_badge.short_description = 'Payment Status'
     
@@ -357,7 +412,8 @@ class OrderAdmin(admin.ModelAdmin):
         colors = {
             'PENDING': '#ff9800',
             'PROCESSING': '#2196f3',
-            'SHIPPED': '#9c27b0',
+            'PACKED': '#9c27b0',
+            'SHIPPED': '#673ab7',
             'DELIVERED': '#4caf50',
             'CANCELLED': '#f44336',
         }
@@ -373,6 +429,29 @@ class OrderAdmin(admin.ModelAdmin):
             return format_html('<span style="background-color: #2196f3; color: white; padding: 5px 10px; border-radius: 3px;">🔄 RESELL</span>')
         return '—'
     is_resell_badge.short_description = 'Type'
+    
+    # Admin Actions
+    def approve_orders(self, request, queryset):
+        from django.utils import timezone
+        updated = queryset.filter(approval_status='PENDING_APPROVAL').update(
+            approval_status='APPROVED',
+            approved_by=request.user,
+            approved_at=timezone.now(),
+            order_status='PROCESSING'
+        )
+        self.message_user(request, f'{updated} orders approved successfully.')
+    approve_orders.short_description = "✅ Approve selected orders"
+    
+    def reject_orders(self, request, queryset):
+        from django.utils import timezone
+        updated = queryset.filter(approval_status='PENDING_APPROVAL').update(
+            approval_status='REJECTED',
+            approved_by=request.user,
+            approved_at=timezone.now(),
+            order_status='CANCELLED'
+        )
+        self.message_user(request, f'{updated} orders rejected.')
+    reject_orders.short_description = "❌ Reject selected orders"
 
 
 @admin.register(OrderItem)
