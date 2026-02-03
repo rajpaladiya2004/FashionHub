@@ -27,17 +27,14 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-i^r#ehtun$tu8)w!uz)g_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',') if config('ALLOWED_HOSTS', default='*') != '*' else ['*']
+ALLOWED_HOSTS = ['web-production-edf15.up.railway.app', 'localhost', '127.0.0.1']
 
 # CSRF Settings for Railway deployment
 CSRF_TRUSTED_ORIGINS = [
     'https://web-production-edf15.up.railway.app',
-    'https://*.railway.app',
-    'https://*.up.railway.app',
 ]
 
-# Allow CSRF from self
-CSRF_ALLOWED_HOSTS = ['web-production-edf15.up.railway.app', '*.railway.app', '*.up.railway.app']
+CSRF_COOKIE_HTTPONLY = False
 
 # Application definition
 
@@ -180,11 +177,9 @@ SITE_NAME = 'FashioHub'
 
 # Security Settings for Production
 SECURE_PROXY_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_SECURITY_POLICY = {
