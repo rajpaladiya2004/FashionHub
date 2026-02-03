@@ -36,12 +36,6 @@ def admin_test(request):
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
-def admin_widgets(request):
-    """Admin Widgets Page"""
-    return render(request, 'admin_panel/widgets.html')
-
-@login_required(login_url='login')
-@staff_member_required(login_url='login')
 def admin_dashboard(request):
     """Admin Dashboard with comprehensive e-commerce statistics"""
     from datetime import timedelta

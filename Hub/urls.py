@@ -5,7 +5,6 @@ urlpatterns = [
     # Admin Panel URLs
     path('admin-panel/', views.admin_dashboard, name='admin_dashboard'),
     path('admin-panel/test/', views.admin_test, name='admin_test'),
-    path('admin-panel/widgets/', views.admin_widgets, name='admin_widgets'),
     path('admin-panel/add-product/', views.admin_add_product, name='admin_add_product'),
     path('admin-panel/products/', views.admin_product_list, name='admin_product_list'),
     path('admin-panel/products/edit/<int:product_id>/', views.admin_edit_product, name='admin_edit_product'),
