@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-i^r#ehtun$tu8)w!uz)g_@7!4&hfxo9=cf7brdr0!ufwnaeeb!')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',') if config('ALLOWED_HOSTS', default='*') != '*' else ['*']
 
@@ -33,7 +33,11 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',') if config('ALLOW
 CSRF_TRUSTED_ORIGINS = [
     'https://web-production-edf15.up.railway.app',
     'https://*.railway.app',
+    'https://*.up.railway.app',
 ]
+
+# Allow CSRF from self
+CSRF_ALLOWED_HOSTS = ['web-production-edf15.up.railway.app', '*.railway.app', '*.up.railway.app']
 
 # Application definition
 
@@ -50,6 +54,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -57,7 +62,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'Hub.middleware.BlockedUserMiddleware',  # Block users who are marked as blocked
-    # 'livereload.middleware.LiveReloadScript',  # Commented out - not needed
 ]
 
 ROOT_URLCONF = 'FashioHub.urls'
