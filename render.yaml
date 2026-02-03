@@ -4,6 +4,7 @@ services:
     runtime: python
     buildCommand: "./build.sh"
     startCommand: "gunicorn FashioHub.wsgi:application"
+    plan: free
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.7
@@ -20,3 +21,4 @@ databases:
   - name: fashionhub-db
     databaseName: fashionhub
     user: fashionhub
+    plan: free
