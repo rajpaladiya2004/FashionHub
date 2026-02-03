@@ -29,6 +29,11 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',') if config('ALLOWED_HOSTS', default='*') != '*' else ['*']
 
+# CSRF Settings for Railway deployment
+CSRF_TRUSTED_ORIGINS = [
+    'https://web-production-edf15.up.railway.app',
+    'https://*.railway.app',
+]
 
 # Application definition
 
