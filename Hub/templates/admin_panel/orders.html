@@ -268,6 +268,14 @@
                     </select>
                 </div>
                 <div class="col-md-2 mb-3">
+                    <label class="form-label">Payment Method</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="">All Methods</option>
+                        <option value="COD" {% if payment_method_filter == 'COD' %}selected{% endif %}>COD</option>
+                        <option value="RAZORPAY" {% if payment_method_filter == 'RAZORPAY' %}selected{% endif %}>RAZORPAY</option>
+                    </select>
+                </div>
+                <div class="col-md-2 mb-3">
                     <label class="form-label">Fraud Filter</label>
                     <select name="suspicious" class="form-select">
                         <option value="">All Orders</option>

@@ -166,7 +166,7 @@
                             <form method="post" class="d-inline">
                                 {% csrf_token %}
                                 <input type="hidden" name="action" value="toggle_admin">
-                                {% if customer.is_staff %}
+                                {% if customer.is_staff or profile.customer_segment == 'ADMIN' %}
                                     <button type="submit" class="btn btn-outline-warning w-100" 
                                             onclick="return confirm('Revoke admin access?')">
                                         <i class="bx bx-user-minus me-1"></i> Revoke Admin Access

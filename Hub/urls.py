@@ -47,6 +47,9 @@ urlpatterns = [
     path('admin-panel/reviews/<int:review_id>/delete/', views.admin_delete_review, name='admin_delete_review'),
     path('admin-panel/product/<int:product_id>/add-review/', views.admin_add_review, name='admin_add_review'),
     
+    # Auth
+    path('accounts/login/', views.login_view, name='accounts_login'),
+
     # Profile
     path('profile/', views.profile_view, name='profile'),
     path('api/profile/stats/', views.api_profile_stats, name='api_profile_stats'),
@@ -89,4 +92,14 @@ urlpatterns = [
     path('review/<int:review_id>/vote/', views.vote_review, name='vote_review'),
     path('product/<int:product_id>/submit-question/', views.submit_question, name='submit_question'),
     path('product/<int:product_id>/notify/', views.request_stock_notification, name='request_stock_notification'),
+    
+    # Password Reset URLs
+    path('password_reset/', views.password_reset_view, name='password_reset'),
+    path('password_reset_done/', views.password_reset_done_view, name='password_reset_done'),
+    path('password_reset_confirm/<uidb64>/<token>/', views.password_reset_confirm_view, name='password_reset_confirm'),
+    path('password_reset_complete/', views.password_reset_complete_view, name='password_reset_complete'),
+
+    # Email Verification URLs
+    path('verify-email/', views.verify_email_sent, name='verify_email_sent'),
+    path('verify-email/<uidb64>/<token>/', views.verify_email, name='verify_email'),
 ]

@@ -7,13 +7,18 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
-from django.db.models import Count, Q, Avg, Sum, F, DecimalField, ExpressionWrapper
+from django.db.models import Count, Q, Avg, Sum, F, DecimalField, ExpressionWrapper, Case, When, Value, IntegerField
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.conf import settings
 from django.urls import reverse
 from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
+from django.conf import settings
 from decimal import Decimal
 from urllib.parse import urlencode
 import logging
@@ -40,7 +45,7 @@ def admin_widgets(request):
 def admin_dashboard(request):
     """Admin Dashboard with comprehensive e-commerce statistics"""
     from datetime import timedelta
-    from django.db.models.functions import TruncDate, TruncMonth
+    from django.db.models.functions import TruncDate, TruncMonth, ExtractHour
     import calendar
     
     # Get current date for filtering
@@ -120,6 +125,32 @@ def admin_dashboard(request):
     visitors_week_labels = [today - timedelta(days=i) for i in range(6, -1, -1)]
     visitors_weekly_series = [visitors_series_map.get(day, 0) for day in visitors_week_labels]
 
+    # Visitors (today, yesterday, last 30 days)
+    yesterday = today - timedelta(days=1)
+
+    visitors_today_qs = User.objects.filter(date_joined__date=today).annotate(
+        hour=ExtractHour('date_joined')
+    ).values('hour').annotate(count=Count('id')).order_by('hour')
+    visitors_today_map = {row['hour']: row['count'] for row in visitors_today_qs}
+    visitors_today_series = [visitors_today_map.get(h, 0) for h in range(24)]
+    visitors_today_count = sum(visitors_today_series)
+
+    visitors_yesterday_qs = User.objects.filter(date_joined__date=yesterday).annotate(
+        hour=ExtractHour('date_joined')
+    ).values('hour').annotate(count=Count('id')).order_by('hour')
+    visitors_yesterday_map = {row['hour']: row['count'] for row in visitors_yesterday_qs}
+    visitors_yesterday_series = [visitors_yesterday_map.get(h, 0) for h in range(24)]
+    visitors_yesterday_count = sum(visitors_yesterday_series)
+
+    last_30_start = today - timedelta(days=29)
+    visitors_last_month_qs = User.objects.filter(date_joined__date__gte=last_30_start).annotate(
+        date=TruncDate('date_joined')
+    ).values('date').annotate(count=Count('id')).order_by('date')
+    visitors_last_month_map = {row['date']: row['count'] for row in visitors_last_month_qs}
+    visitors_last_month_labels = [last_30_start + timedelta(days=i) for i in range(30)]
+    visitors_last_month_series = [visitors_last_month_map.get(day, 0) for day in visitors_last_month_labels]
+    visitors_last_month_count = sum(visitors_last_month_series)
+
     # Activity (orders) last 7 days vs previous 7 days
     activity_last_7 = Order.objects.filter(created_at__date__gte=last_7_days).count()
     activity_prev_7 = Order.objects.filter(
@@ -134,8 +165,13 @@ def admin_dashboard(request):
     activity_series_map = {row['date']: row['count'] for row in activity_series_qs}
     activity_weekly_series = [activity_series_map.get(day, 0) for day in visitors_week_labels]
 
-    # Sales (last 30 days)
+    # Sales (ranges)
     last_30_revenue = paid_orders_qs.filter(created_at__date__gte=last_30_days).aggregate(total=Sum('total_amount'))['total'] or 0
+    sales_today = paid_orders_qs.filter(created_at__date=today).aggregate(total=Sum('total_amount'))['total'] or 0
+    sales_yesterday = paid_orders_qs.filter(created_at__date=today - timedelta(days=1)).aggregate(total=Sum('total_amount'))['total'] or 0
+    sales_last_month = last_30_revenue
+    last_6_start = (current_month_start - timedelta(days=1)).replace(day=1) - timedelta(days=30 * 5)
+    sales_last_6_months = paid_orders_qs.filter(created_at__date__gte=last_6_start).aggregate(total=Sum('total_amount'))['total'] or 0
     prev_30_start = last_30_days - timedelta(days=30)
     prev_30_revenue = paid_orders_qs.filter(
         created_at__date__gte=prev_30_start,
@@ -226,18 +262,19 @@ def admin_dashboard(request):
             'status': order.payment_status
         })
 
-    # Best seller card
-    best_seller_item = (
+    # Top selling product (last 30 days)
+    top_selling_item = (
         OrderItem.objects
-        .filter(order__payment_status='PAID')
+        .filter(order__payment_status='PAID', order__created_at__date__gte=last_30_days)
         .values('product_id', 'product_name')
         .annotate(total_qty=Sum('quantity'), total_value=Sum('subtotal'))
-        .order_by('-total_qty')
+        .order_by('-total_qty', '-total_value')
         .first()
     )
-    best_seller_name = best_seller_item['product_name'] if best_seller_item else 'N/A'
-    best_seller_sales = best_seller_item['total_value'] if best_seller_item else 0
-    best_seller_target_percent = min(round((best_seller_sales / (monthly_revenue or Decimal('1'))) * 100, 1), 100) if monthly_revenue else 0
+    top_selling_name = top_selling_item['product_name'] if top_selling_item else 'N/A'
+    top_selling_sales = top_selling_item['total_value'] if top_selling_item else 0
+    top_selling_qty = top_selling_item['total_qty'] if top_selling_item else 0
+    top_selling_target_percent = min(round((top_selling_sales / (monthly_revenue or Decimal('1'))) * 100, 1), 100) if monthly_revenue else 0
 
     # Revenue growth vs previous month
     revenue_growth_percent = round(((monthly_revenue - prev_month_revenue) / prev_month_revenue) * 100, 1) if prev_month_revenue else (100.0 if monthly_revenue else 0.0)
@@ -245,16 +282,6 @@ def admin_dashboard(request):
     # Sales target
     sales_target = monthly_revenue * Decimal('1.2') if monthly_revenue else Decimal('10000')
     sales_target_percent = min(round((monthly_revenue / sales_target) * 100, 1), 100) if sales_target else 0
-    
-    # Category-wise Product Count
-    category_stats = []
-    for category_code, category_name in Product.CATEGORY_CHOICES:
-        count = Product.objects.filter(category=category_code).count()
-        if count > 0:
-            category_stats.append({
-                'name': category_name,
-                'count': count
-            })
     
     # Recent Customers
     recent_customers = User.objects.filter(is_staff=False).order_by('-date_joined')[:5]
@@ -287,19 +314,29 @@ def admin_dashboard(request):
         
         # Chart Data
         'daily_sales': list(daily_sales),
-        'category_stats': category_stats,
 
         # Dashboard UI data
-        'best_seller_name': best_seller_name,
-        'best_seller_sales': best_seller_sales,
-        'best_seller_target_percent': best_seller_target_percent,
+        'top_selling_name': top_selling_name,
+        'top_selling_sales': top_selling_sales,
+        'top_selling_qty': top_selling_qty,
+        'top_selling_target_percent': top_selling_target_percent,
 
         'visitors_weekly_percent': visitors_weekly_percent,
         'visitors_weekly_series': visitors_weekly_series,
+        'visitors_today_series': visitors_today_series,
+        'visitors_yesterday_series': visitors_yesterday_series,
+        'visitors_last_month_series': visitors_last_month_series,
+        'visitors_today_count': visitors_today_count,
+        'visitors_yesterday_count': visitors_yesterday_count,
+        'visitors_last_month_count': visitors_last_month_count,
         'activity_weekly_percent': activity_weekly_percent,
         'activity_weekly_series': activity_weekly_series,
 
         'last_30_revenue': last_30_revenue,
+        'sales_today': sales_today,
+        'sales_yesterday': sales_yesterday,
+        'sales_last_month': sales_last_month,
+        'sales_last_6_months': sales_last_6_months,
         'sales_change_percent': sales_change_percent,
         'profit_last_30': profit_last_30,
         'expenses_last_30': expenses_last_30,
@@ -357,7 +394,8 @@ def admin_add_product(request):
             price = request.POST.get('price')
             old_price = request.POST.get('old_price')
             stock = request.POST.get('stock')
-            category = request.POST.get('category')
+            is_active = request.POST.get('is_active') == 'on'
+            is_top_deal = request.POST.get('is_top_deal') == 'on'
             
             # Convert rating and review_count to proper types
             try:
@@ -371,19 +409,19 @@ def admin_add_product(request):
                 review_count = 0
             
             # Get new fields
+            category = request.POST.get('category')
             sku = request.POST.get('sku', '')
             brand = request.POST.get('brand', '')
-            tags = request.POST.get('tags', '')
             description = request.POST.get('description', '')
             weight = request.POST.get('weight', '')
-            dimensions = request.POST.get('dimensions', '')
             color = request.POST.get('color', '')
-            size = request.POST.get('size', '')
-            shipping_info = request.POST.get('shipping_info', '')
-            care_info = request.POST.get('care_info', '')
+            # Handle multiple size selections from checkboxes
+            size_list = request.POST.getlist('size')
+            size = ', '.join(size_list) if size_list else ''
             
             # Get images
             image = request.FILES.get('image')
+            descriptionImage = request.FILES.get('descriptionImage')
             gallery_images = request.FILES.getlist('gallery_images')
             
             # Create product
@@ -392,22 +430,19 @@ def admin_add_product(request):
                 price=price,
                 old_price=old_price if old_price else None,
                 stock=stock,
-                category=category if category else None,
                 rating=rating,
                 review_count=review_count,
-                is_active=is_active,
-                is_top_deal=is_top_deal,
+                is_active=True,
+                is_top_deal=False,
                 image=image,
+                descriptionImage=descriptionImage,
+                category=category if category else None,
                 sku=sku,
                 brand=brand,
-                tags=tags,
                 description=description,
                 weight=weight,
-                dimensions=dimensions,
                 color=color,
-                size=size,
-                shipping_info=shipping_info,
-                care_info=care_info
+                size=size
             )
             
             # Add gallery images if provided
@@ -546,9 +581,6 @@ def admin_product_list(request):
     elif status_filter == 'inactive':
         products = products.filter(is_active=False)
 
-    if category_filter and category_filter != 'all':
-        products = products.filter(category=category_filter)
-
     if stock_filter == 'in':
         products = products.filter(stock__gt=0)
     elif stock_filter == 'out':
@@ -574,7 +606,7 @@ def admin_product_list(request):
             writer.writerow([
                 product.id,
                 product.name,
-                product.get_category_display() if product.category else 'General',
+                'General',
                 product.stock,
                 product.sku or '',
                 product.price,
@@ -616,9 +648,6 @@ def admin_product_list(request):
     discount_orders_count = paid_orders.filter(subtotal__gt=0).count()
     affiliate_orders_count = paid_orders.filter(is_resell=True).count()
 
-    # Category filter list
-    category_choices = Product.CATEGORY_CHOICES
-    
     query_params = request.GET.copy()
     query_params.pop('page', None)
     query_params.pop('export', None)
@@ -630,7 +659,6 @@ def admin_product_list(request):
         'stock_filter': stock_filter,
         'search_query': search_query,
         'per_page': per_page,
-        'category_choices': category_choices,
 
         'in_store_sales': in_store_sales,
         'website_sales': website_sales,
@@ -671,7 +699,8 @@ def admin_edit_product(request, product_id):
             product.weight = request.POST.get('weight', '')
             product.dimensions = request.POST.get('dimensions', '')
             product.color = request.POST.get('color', '')
-            product.size = request.POST.get('size', '')
+            size_list = request.POST.getlist('size')
+            product.size = ', '.join(size_list) if size_list else ''
             product.shipping_info = request.POST.get('shipping_info', '')
             product.care_info = request.POST.get('care_info', '')
             
@@ -1177,6 +1206,11 @@ def admin_orders(request):
     payment_filter = request.GET.get('payment', '')
     if payment_filter:
         all_orders = all_orders.filter(order__payment_status=payment_filter)
+
+    # Payment method filter
+    payment_method_filter = request.GET.get('payment_method', '')
+    if payment_method_filter:
+        all_orders = all_orders.filter(order__payment_method=payment_method_filter)
     
     # Approval status filter
     approval_filter = request.GET.get('approval', '')
@@ -1259,6 +1293,14 @@ def admin_orders(request):
     # Today's orders
     today_orders = Order.objects.filter(created_at__date=datetime.now().date()).count()
     
+    # Payment methods list
+    payment_methods = list(
+        Order.objects.exclude(payment_method__isnull=True)
+        .exclude(payment_method__exact='')
+        .values_list('payment_method', flat=True)
+        .distinct()
+    )
+
     # === EXPORT TO CSV ===
     if request.GET.get('export') == 'csv':
         response = HttpResponse(content_type='text/csv')
@@ -1297,6 +1339,7 @@ def admin_orders(request):
         'orders': orders,
         'status_filter': status_filter,
         'payment_filter': payment_filter,
+        'payment_method_filter': payment_method_filter,
         'approval_filter': approval_filter,
         'suspicious_filter': suspicious_filter,
         'search_query': search_query,
@@ -1324,6 +1367,9 @@ def admin_orders(request):
         'today_revenue': today_revenue,
         'this_month_revenue': this_month_revenue,
         'today_orders': today_orders,
+
+        # Payment methods
+        'payment_methods': payment_methods,
         
         # Profit
         'total_profit': total_profit,
@@ -1992,6 +2038,7 @@ def admin_customers(request):
                 messages.success(request, f'Successfully unblocked {len(customer_ids)} customer(s)')
             elif action in ['NEW', 'REGULAR', 'VIP', 'ADMIN']:
                 UserProfile.objects.filter(user__in=users).update(customer_segment=action)
+                users.update(is_staff=(action == 'ADMIN'))
                 messages.success(request, f'Successfully updated {len(customer_ids)} customer(s) to {action}')
             elif action == 'delete':
                 users.delete()
@@ -2023,6 +2070,15 @@ def admin_customers(request):
             Q(first_name__icontains=search_query) |
             Q(last_name__icontains=search_query)
         )
+
+    # Always show ADMIN segment users first
+    customers = customers.annotate(
+        admin_order=Case(
+            When(userprofile__customer_segment='ADMIN', then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+    ).order_by('admin_order', 'id')
     
     # Calculate stats
     total_customers = User.objects.all().count()  # Include all users
@@ -2083,10 +2139,8 @@ def admin_customer_details(request, customer_id):
             new_segment = request.POST.get('segment')
             if new_segment in ['NEW', 'REGULAR', 'VIP', 'ADMIN']:
                 profile.customer_segment = new_segment
-                # If making admin, also set is_staff
-                if new_segment == 'ADMIN':
-                    customer.is_staff = True
-                    customer.save()
+                customer.is_staff = (new_segment == 'ADMIN')
+                customer.save()
                 profile.save()
                 messages.success(request, f'Customer segment updated to {new_segment}')
         elif action == 'toggle_admin':
@@ -2094,7 +2148,9 @@ def admin_customer_details(request, customer_id):
             customer.save()
             if customer.is_staff:
                 profile.customer_segment = 'ADMIN'
-                profile.save()
+            else:
+                profile.customer_segment = 'REGULAR'
+            profile.save()
             status = 'granted' if customer.is_staff else 'revoked'
             messages.success(request, f'Admin access {status} successfully')
         
@@ -2282,10 +2338,15 @@ def index(request):
     features = Feature.objects.filter(is_active=True)
     banners = Banner.objects.filter(is_active=True)
     categories = CategoryIcon.objects.filter(is_active=True)
-    top_deals = Product.objects.filter(is_active=True, category='TOP_DEALS')
-    top_selling = Product.objects.filter(is_active=True, category='TOP_SELLING')
-    top_featured = Product.objects.filter(is_active=True, category='TOP_FEATURED')
-    recommended = Product.objects.filter(is_active=True, category='RECOMMENDED')
+    
+    # Get latest active products for all sections
+    # Order by -id since newer products have higher IDs
+    latest_products = Product.objects.filter(is_active=True).order_by('-id')
+    top_deals = latest_products[:10]
+    top_selling = latest_products[:10]
+    top_featured = latest_products[:10]
+    recommended = latest_products[:10]
+    
     countdown = DealCountdown.objects.filter(is_active=True).first()
     brand_partners = BrandPartner.objects.filter(is_active=True).order_by('order')
 
@@ -2663,13 +2724,19 @@ def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
+        remember_me = request.POST.get("remember_me")
 
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            return redirect("index")  # change if needed
+            # Set session expiry based on remember me checkbox
+            if remember_me:
+                request.session.set_expiry(30 * 24 * 60 * 60)  # 30 days
+            else:
+                request.session.set_expiry(0)  # Session expires when browser closes
+            return redirect("index")
         else:
-            messages.error(request, "Invalid username or password")
+            messages.error(request, "Invalid username or password. Please check your credentials and try again.")
 
     return render(request, "login.html")
 
@@ -2801,13 +2868,10 @@ def shop(request):
     ).order_by('order')
 
     # Filters from query params
-    category = request.GET.get('category')
     min_price = request.GET.get('min_price')
     max_price = request.GET.get('max_price')
     min_rating = request.GET.get('min_rating')
 
-    if category:
-        products = products.filter(category=category)
     if min_price:
         try:
             products = products.filter(price__gte=float(min_price))
@@ -2826,18 +2890,11 @@ def shop(request):
 
     special_offers = Product.objects.filter(is_active=True).order_by('-discount_percent', '-id')[:5]
 
-    # Category counts for sidebar
-    category_counts = (
-        Product.objects.filter(is_active=True)
-        .values('category')
-        .annotate(total=Count('id'))
-    )
-    category_count_map = {item['category']: item['total'] for item in category_counts}
-    
     # Get categories from CategoryIcon (dynamic admin-managed categories)
     category_icons = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
+    # Category data without product counts
     category_data = [
-        (cat.category_key, cat.name, category_count_map.get(cat.category_key, 0))
+        (cat.category_key, cat.name, 0)
         for cat in category_icons
     ]
 
@@ -2867,7 +2924,7 @@ def shop(request):
         'banners': banners,
         'special_offers': special_offers,
         'category_data': category_data,
-        'selected_category': category,
+        'selected_category': '',
         'min_price': min_price or '',
         'max_price': max_price or '',
         'selected_rating': min_rating or '',
@@ -2903,32 +2960,96 @@ def register_view(request):
         mobile_number = request.POST.get("mobile_number")
         profile_image = request.FILES.get("profile_image")
 
+        # Validate password strength
+        if len(password) < 8:
+            messages.error(request, "Password must be at least 8 characters long")
+            return redirect("register")
+
         if password != confirm_password:
-            messages.error(request, "Passwords do not match")
+            messages.error(request, "Passwords do not match. Please ensure both passwords are identical.")
             return redirect("register")
 
         if User.objects.filter(username=username).exists():
-            messages.error(request, "Username already exists")
+            messages.error(request, "Username already taken. Please choose a different username.")
             return redirect("register")
 
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password
-        )
-        user.first_name = name
-        user.save()
+        if User.objects.filter(email=email).exists():
+            messages.error(request, "Email already registered. Please use a different email or login.")
+            return redirect("register")
 
-        profile = user.userprofile
-        profile.country_code = country_code
-        profile.mobile_number = mobile_number
-        if profile_image:
-            profile.profile_image = profile_image
-        profile.save()
+        try:
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password
+            )
+            user.first_name = name
+            user.is_active = False
+            user.save()
+
+            profile = user.userprofile
+            profile.country_code = country_code
+            profile.mobile_number = mobile_number
+            if profile_image:
+                profile.profile_image = profile_image
+            profile.save()
+
+            send_verification_email(user, request)
+            messages.success(request, "Account created! Please verify your email to activate your account.", extra_tags='success')
+            return redirect("verify_email_sent")
+        except Exception as e:
+            messages.error(request, f"An error occurred during registration: {str(e)}")
+            return redirect("register")
+
+    return render(request, "register.html")
 
 
-        messages.success(request, "Account created successfully")
-        return redirect("login")
+def send_verification_email(user, request):
+    """Send email verification link"""
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    verify_url = request.build_absolute_uri(
+        f"/verify-email/{uid}/{token}/"
+    )
+
+    subject = "Verify your FashionHub account"
+    message = render_to_string('emails/verify_email.html', {
+        'user': user,
+        'verify_url': verify_url,
+    })
+
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+        html_message=message,
+    )
+
+
+def verify_email_sent(request):
+    """Show verification sent page"""
+    return render(request, 'verify_email_sent.html')
+
+
+def verify_email(request, uidb64, token):
+    """Verify user email and activate account"""
+    try:
+        uid = urlsafe_base64_decode(uidb64).decode()
+        user = User.objects.get(pk=uid)
+
+        if default_token_generator.check_token(user, token):
+            user.is_active = True
+            user.save()
+            messages.success(request, "Email verified successfully! You can log in now.")
+            return redirect('login')
+
+        messages.error(request, "Verification link is invalid or expired.")
+        return redirect('register')
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        messages.error(request, "Invalid verification link.")
+        return redirect('register')
 
     return render(request, "register.html")
 
@@ -2936,6 +3057,92 @@ def register_view(request):
 def logout_view(request):
     logout(request)
     return redirect("index")
+
+
+# ===== PASSWORD RESET VIEWS =====
+
+def password_reset_view(request):
+    """Display password reset request form"""
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        try:
+            user = User.objects.get(email=email)
+            # Generate token and uid
+            from django.contrib.auth.tokens import default_token_generator
+            from django.utils.encoding import force_bytes
+            from django.utils.http import urlsafe_base64_encode
+            
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            
+            # Send email (simplified - in production use Django's send_mail)
+            reset_url = request.build_absolute_uri(
+                f"/password_reset_confirm/{uid}/{token}/"
+            )
+            
+            # For demo purposes, show the reset link directly
+            # In production, send this via email
+            request.session['reset_url'] = reset_url
+            request.session['reset_email'] = email
+            
+            messages.success(request, f"Password reset link sent to {email}")
+            return redirect('password_reset_done')
+        except User.DoesNotExist:
+            messages.error(request, "No account found with this email address")
+    
+    return render(request, 'password_reset.html')
+
+
+def password_reset_done_view(request):
+    """Display message after password reset request"""
+    email = request.session.get('reset_email', '')
+    return render(request, 'password_reset_done.html', {'email': email})
+
+
+def password_reset_confirm_view(request, uidb64, token):
+    """Handle password reset with token verification"""
+    from django.contrib.auth.tokens import default_token_generator
+    from django.utils.http import urlsafe_base64_decode
+    
+    try:
+        uid = urlsafe_base64_decode(uidb64).decode()
+        user = User.objects.get(pk=uid)
+        
+        if not default_token_generator.check_token(user, token):
+            messages.error(request, "Password reset link has expired")
+            return redirect('login')
+        
+        if request.method == 'POST':
+            password1 = request.POST.get('new_password1')
+            password2 = request.POST.get('new_password2')
+            
+            if not password1 or not password2:
+                messages.error(request, "Both password fields are required")
+                return render(request, 'password_reset_confirm.html')
+            
+            if password1 != password2:
+                messages.error(request, "Passwords do not match")
+                return render(request, 'password_reset_confirm.html')
+            
+            if len(password1) < 8:
+                messages.error(request, "Password must be at least 8 characters")
+                return render(request, 'password_reset_confirm.html')
+            
+            user.set_password(password1)
+            user.save()
+            messages.success(request, "Password reset successfully!")
+            return redirect('password_reset_complete')
+        
+        return render(request, 'password_reset_confirm.html', {'uidb64': uidb64, 'token': token})
+    
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        messages.error(request, "Invalid password reset link")
+        return redirect('login')
+
+
+def password_reset_complete_view(request):
+    """Display success message after password reset"""
+    return render(request, 'password_reset_complete.html')
 
 
 # ===== CART MANAGEMENT VIEWS =====
@@ -3428,23 +3635,21 @@ def add_product(request):
             price = request.POST.get('price')
             old_price = request.POST.get('old_price')
             stock = request.POST.get('stock')
-            category = request.POST.get('category')
             rating = request.POST.get('rating', 0)
             review_count = request.POST.get('review_count', 0)
             is_active = request.POST.get('is_active') == 'on'
             is_top_deal = request.POST.get('is_top_deal') == 'on'
             
             # Get new fields
+            category = request.POST.get('category')
             sku = request.POST.get('sku', '')
             brand = request.POST.get('brand', '')
-            tags = request.POST.get('tags', '')
             description = request.POST.get('description', '')
             weight = request.POST.get('weight', '')
-            dimensions = request.POST.get('dimensions', '')
             color = request.POST.get('color', '')
-            size = request.POST.get('size', '')
-            shipping_info = request.POST.get('shipping_info', '')
-            care_info = request.POST.get('care_info', '')
+            # Handle multiple size selections from checkboxes
+            size_list = request.POST.getlist('size')
+            size = ', '.join(size_list) if size_list else ''
             
             # Get images
             image = request.FILES.get('image')
@@ -3457,23 +3662,19 @@ def add_product(request):
                 price=price,
                 old_price=old_price if old_price else None,
                 stock=stock,
-                category=category if category else None,
                 rating=rating,
                 review_count=review_count,
-                is_active=is_active,
-                is_top_deal=is_top_deal,
+                is_active=True,
+                is_top_deal=False,
                 image=image,
                 descriptionImage=descriptionImage,
+                category=category if category else None,
                 sku=sku,
                 brand=brand,
-                tags=tags,
                 description=description,
                 weight=weight,
-                dimensions=dimensions,
                 color=color,
-                size=size,
-                shipping_info=shipping_info,
-                care_info=care_info
+                size=size
             )
             
             # Add gallery images if provided
@@ -3485,46 +3686,17 @@ def add_product(request):
                     is_active=True
                 )
             
-            # Auto-create CategoryIcon if category is selected and doesn't exist
-            if category:
-                category_name = dict(Product.CATEGORY_CHOICES).get(category, category)
-                CategoryIcon.objects.get_or_create(
-                    category_key=category,
-                    defaults={
-                        'name': category_name,
-                        'background_gradient': 'linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%)',
-                        'icon_color': '#1976D2',
-                        'is_active': True,
-                        'order': CategoryIcon.objects.count()
-                    }
-                )
-            
             messages.success(request, f'Product "{product.name}" added successfully with {len(gallery_images)} gallery images!')
             return redirect('add_product')
             
         except Exception as e:
             messages.error(request, f'Error adding product: {str(e)}')
     
-    # Get filter parameter
-    category_filter = request.GET.get('category', '')
-    
     # Get all products for display
-    products = Product.objects.all()
-    
-    # Apply category filter if selected
-    if category_filter:
-        products = products.filter(category=category_filter)
-    
-    products = products.order_by('-id')[:30]  # Show last 30 products
-    
-    # Get all available categories from products
-    available_categories = Product.objects.exclude(category__isnull=True).exclude(category='').values_list('category', flat=True).distinct()
-    category_choices = [{'key': cat, 'name': dict(Product.CATEGORY_CHOICES).get(cat, cat)} for cat in available_categories]
+    products = Product.objects.all().order_by('-id')[:30]  # Show last 30 products
     
     return render(request, 'add_product.html', {
         'products': products,
-        'category_choices': category_choices,
-        'selected_category': category_filter
     })
 
 # ===== AJAX WISHLIST VIEW =====

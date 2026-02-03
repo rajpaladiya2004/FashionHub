@@ -284,7 +284,7 @@
                             
                             <div class="form-group">
                                 <label for="category">Category</label>
-                                <select name="category" id="category">
+                                <select name="category" id="category" required>
                                     <option value="">-- Select Category --</option>
                                     <option value="TOP_DEALS">Top Deals Of The Day</option>
                                     <option value="TOP_SELLING">Top Selling Products</option>
@@ -302,26 +302,7 @@
                                 <div class="field-hint">Choose where to display this product</div>
                             </div>
 
-                            <div class="form-group">
-                                <label for="tags">Tags (comma-separated)</label>
-                                <input type="text" name="tags" id="tags" placeholder="e.g., Quality, New, Trending, Electronics">
-                                <div class="field-hint">Separate multiple tags with commas - will appear as feature bullets</div>
-                            </div>
-
                             <div class="form-row">
-                                <div class="form-group-checkbox">
-                                    <label>
-                                        <input type="checkbox" name="is_active" checked>
-                                        <span>Active (Product is visible on website)</span>
-                                    </label>
-                                </div>
-
-                                <div class="form-group-checkbox">
-                                    <label>
-                                        <input type="checkbox" name="is_top_deal">
-                                        <span>Top Deal (Featured in deals section)</span>
-                                    </label>
-                                </div>
                             </div>
                         </div>
 
@@ -414,7 +395,7 @@
                                 <span>Product Specifications</span>
                             </div>
                             
-                            <div class="form-row-4">
+                            <div class="form-row-3">
                                 <div class="form-group">
                                     <label for="weight">Weight</label>
                                     <input type="text" name="weight" id="weight" placeholder="e.g., 2 lbs">
@@ -422,44 +403,69 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="dimensions">Dimensions</label>
-                                    <input type="text" name="dimensions" id="dimensions" placeholder="e.g., 12 × 16 × 19 in">
-                                    <div class="field-hint">Length × Width × Height</div>
-                                </div>
-
-                                <div class="form-group">
                                     <label for="color">Available Colors</label>
                                     <input type="text" name="color" id="color" placeholder="e.g., Gray, Black, White">
                                     <div class="field-hint">Separate with commas</div>
                                 </div>
-
-                                <div class="form-group">
-                                    <label for="size">Available Sizes</label>
-                                    <input type="text" name="size" id="size" placeholder="e.g., S, M, L, XL">
-                                    <div class="field-hint">Separate with commas</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 6. Shipping & Care Section -->
-                        <div class="product-form-section">
-                            <div class="section-title">
-                                <span>🚚</span>
-                                <span>Shipping & Care</span>
                             </div>
                             
-                            <div class="form-row-2">
-                                <div class="form-group">
-                                    <label for="shipping_info">Shipping Information</label>
-                                    <input type="text" name="shipping_info" id="shipping_info" placeholder="e.g., Free shipping on orders over &#8377;500">
-                                    <div class="field-hint">Shipping methods and costs</div>
+                            <div class="form-group">
+                                <label>Available Sizes (Select Multiple)</label>
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 10px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="Un Stitched" id="size_un_stitched" style="margin-right: 8px;">
+                                        <label for="size_un_stitched" style="margin: 0;">Un Stitched</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="Semi Stitched" id="size_semi_stitched" style="margin-right: 8px;">
+                                        <label for="size_semi_stitched" style="margin: 0;">Semi Stitched</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="Free Size" id="size_free" style="margin-right: 8px;">
+                                        <label for="size_free" style="margin: 0;">Free Size</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="XS" id="size_xs" style="margin-right: 8px;">
+                                        <label for="size_xs" style="margin: 0;">XS</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="S" id="size_s" style="margin-right: 8px;">
+                                        <label for="size_s" style="margin: 0;">S</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="M" id="size_m" style="margin-right: 8px;">
+                                        <label for="size_m" style="margin: 0;">M</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="L" id="size_l" style="margin-right: 8px;">
+                                        <label for="size_l" style="margin: 0;">L</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="XL" id="size_xl" style="margin-right: 8px;">
+                                        <label for="size_xl" style="margin: 0;">XL</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="XXL" id="size_xxl" style="margin-right: 8px;">
+                                        <label for="size_xxl" style="margin: 0;">XXL</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="3XL" id="size_3xl" style="margin-right: 8px;">
+                                        <label for="size_3xl" style="margin: 0;">3XL</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="4XL" id="size_4xl" style="margin-right: 8px;">
+                                        <label for="size_4xl" style="margin: 0;">4XL</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="5XL" id="size_5xl" style="margin-right: 8px;">
+                                        <label for="size_5xl" style="margin: 0;">5XL</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="checkbox" name="size" value="6XL" id="size_6xl" style="margin-right: 8px;">
+                                        <label for="size_6xl" style="margin: 0;">6XL</label>
+                                    </div>
                                 </div>
-
-                                <div class="form-group">
-                                    <label for="care_info">Care Instructions</label>
-                                    <input type="text" name="care_info" id="care_info" placeholder="e.g., Machine wash up to 40ºC/86ºF">
-                                    <div class="field-hint">How to care for the product</div>
-                                </div>
+                                <div class="field-hint">Select all applicable sizes for this product</div>
                             </div>
                         </div>
 
@@ -478,30 +484,7 @@
             <div class="table-section" style="margin-top: 60px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h3>📊 Recently Added Products</h3>
-                    
-                    <!-- Category Filter -->
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <label style="font-weight: 600; font-size: 13px; color: #333;">Filter by Category:</label>
-                        <select id="categoryFilter" onchange="filterByCategory()" style="padding: 8px 15px; border: 1px solid #e5e5e5; border-radius: 4px; font-size: 13px; min-width: 200px;">
-                            <option value="">All Categories</option>
-                            {% for cat in category_choices %}
-                            <option value="{{ cat.key }}" {% if selected_category == cat.key %}selected{% endif %}>{{ cat.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
                 </div>
-                
-                <script>
-                function filterByCategory() {
-                    const select = document.getElementById('categoryFilter');
-                    const category = select.value;
-                    if (category) {
-                        window.location.href = '?category=' + category;
-                    } else {
-                        window.location.href = window.location.pathname;
-                    }
-                }
-                </script>
                 
                 <div class="table-responsive">
                     <table class="table">
@@ -511,7 +494,6 @@
                                 <th>Product Name</th>
                                 <th style="text-align: center;">Price</th>
                                 <th style="text-align: center;">Stock</th>
-                                <th>Category</th>
                                 <th style="text-align: center;">Status</th>
                             </tr>
                         </thead>
@@ -534,11 +516,6 @@
                                     {% else %}
                                         <span style="background: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 4px; font-weight: 600; font-size: 12px;">{{ product.stock }} units</span>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    <span style="background: #e8f4f8; color: #004e89; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600;">
-                                        {{ product.get_category_display|default:"-" }}
-                                    </span>
                                 </td>
                                 <td style="text-align: center;">
                                     {% if product.is_active %}

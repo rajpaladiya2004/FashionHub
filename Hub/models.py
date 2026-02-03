@@ -150,22 +150,23 @@ class Banner(models.Model):
         return f"{self.title} ({self.get_banner_type_display()}) - {self.get_page_type_display()}"
 
 
+CATEGORY_CHOICES = [
+    ('TOP_DEALS', 'Top Deals Of The Day'),
+    ('TOP_SELLING', 'Top Selling Products'),
+    ('TOP_FEATURED', 'Top Featured Products'),
+    ('RECOMMENDED', 'Recommended For You'),
+    ('MOBILES', 'Mobiles'),
+    ('FOOD_HEALTH', 'Food & Health'),
+    ('HOME_KITCHEN', 'Home & Kitchen'),
+    ('AUTO_ACC', 'Auto Acc'),
+    ('FURNITURE', 'Furniture'),
+    ('SPORTS', 'Sports'),
+    ('GENZ_TRENDS', 'GenZ Trends'),
+    ('NEXT_GEN', 'Next Gen'),
+]
+
+
 class Product(models.Model):
-    CATEGORY_CHOICES = [
-        ('TOP_DEALS', 'Top Deals Of The Day'),
-        ('TOP_SELLING', 'Top Selling Products'),
-        ('TOP_FEATURED', 'Top Featured Products'),
-        ('RECOMMENDED', 'Recommended For You'),
-        ('MOBILES', 'Mobiles'),
-        ('FOOD_HEALTH', 'Food & Health'),
-        ('HOME_KITCHEN', 'Home & Kitchen'),
-        ('AUTO_ACC', 'Auto Acc'),
-        ('FURNITURE', 'Furniture'),
-        ('SPORTS', 'Sports'),
-        ('GENZ_TRENDS', 'GenZ Trends'),
-        ('NEXT_GEN', 'Next Gen'),
-    ]
-    
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True, null=True, blank=True)
     sku = models.CharField(max_length=100, unique=True, blank=True, null=True, help_text="Stock Keeping Unit")
@@ -180,18 +181,17 @@ class Product(models.Model):
         blank=True
     )
 
+    category = models.CharField(
+        max_length=50,
+        choices=CATEGORY_CHOICES,
+        blank=True,
+        null=True
+    )
+
     discount_percent = models.PositiveIntegerField(default=0)
 
     sold = models.PositiveIntegerField(default=0)
     stock = models.PositiveIntegerField(default=0)
-
-    category = models.CharField(
-        max_length=20,
-        choices=CATEGORY_CHOICES,
-        blank=True,
-        null=True,
-        help_text="Select product category for homepage sections"
-    )
     
     # Product Details
     weight = models.CharField(max_length=50, blank=True, help_text="e.g., 2 lbs")

@@ -43,8 +43,9 @@
                 {% if messages %}
                     <div class="mb-30">
                         {% for message in messages %}
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                <i class="fas fa-exclamation-circle"></i> {{ message }}
+                            <div class="alert alert-{{ message.tags|default:'danger' }} alert-dismissible fade show" role="alert">
+                                <i class="fas fa-{% if message.tags == 'success' %}check-circle{% else %}exclamation-circle{% endif %}"></i> 
+                                <strong>{% if message.tags == 'success' %}Success!{% else %}Error!{% endif %}</strong> {{ message }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         {% endfor %}
@@ -72,8 +73,9 @@
                                 <label class="form-label">Username or Email <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                                    <input type="text" name="username" class="form-control" placeholder="Enter your username or email" required>
+                                    <input type="text" name="username" id="username" class="form-control" placeholder="Enter your username or email" required>
                                 </div>
+                                <span id="username_feedback" class="input-feedback"></span>
                             </div>
 
                             <div class="mb-20">
@@ -90,20 +92,28 @@
                             </div>
                         </div>
 
+                        <!-- Remember Me Checkbox -->
+                        <div class="mb-20">
+                            <div class="form-check">
+                                <input type="checkbox" name="remember_me" id="remember_me" class="form-check-input" value="on">
+                                <label class="form-check-label" for="remember_me">
+                                    Remember me for 30 days
+                                </label>
+                            </div>
+                        </div>
+
                         <!-- Login Button -->
-                        <div class="login-form-actions">
+                        <div class="login-form-actions mb-20">
                             <button type="submit" class="tp-btn-h1 w-100">
                                 <i class="fas fa-sign-in-alt"></i> Login to Account
                             </button>
                         </div>
 
-                        <!-- Additional Links -->
-                        <div class="login-additional-links">
-                            <div class="text-center">
-                                <a href="{% url 'register' %}" class="signup-link">
-                                    <i class="fas fa-user-plus"></i> Create Account
-                                </a>
-                            </div>
+                        <!-- Forgot Password Link -->
+                        <div class="text-center mb-20">
+                            <a href="{% url 'password_reset' %}" class="forgot-password-link">
+                                <i class="fas fa-key"></i> Forgot Password?
+                            </a>
                         </div>
 
                         <!-- Signup Section -->
@@ -163,6 +173,49 @@
     .form-section h6 i {
         color: #f4a800;
         margin-right: 8px;
+    }
+
+    .form-check {
+        display: flex;
+        align-items: center;
+    }
+
+    .form-check-input {
+        width: 18px;
+        height: 18px;
+        margin-right: 8px;
+        cursor: pointer;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+    }
+
+    .form-check-input:checked {
+        background-color: #f4a800;
+        border-color: #f4a800;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 0;
+    }
+
+    .input-feedback {
+        display: none;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .input-feedback.error {
+        color: #e74c3c;
+        display: block;
+    }
+
+    .input-feedback.success {
+        color: #27ae60;
+        display: block;
     }
 
     .form-label {
@@ -300,22 +353,89 @@
     }
 </style>
 
-<!-- Scripts for Password Toggle -->
+<!-- Scripts for Password Toggle, Validation & Security -->
 <script>
+    // Password Toggle Function
     function togglePassword(id) {
         const input = document.getElementById(id);
         const button = input.parentElement.querySelector('.toggle-password-btn i');
         
-        if (input.type === "password") {
-            input.type = "text";
+        if (input.type === \"password\") {
+            input.type = \"text\";
             button.classList.remove('fa-eye');
             button.classList.add('fa-eye-slash');
         } else {
-            input.type = "password";
+            input.type = \"password\";
             button.classList.remove('fa-eye-slash');
             button.classList.add('fa-eye');
         }
     }
+
+    // Real-time Username/Email Validation
+    document.getElementById('username').addEventListener('blur', function() {
+        const feedback = document.getElementById('username_feedback');
+        const value = this.value.trim();
+        
+        if (value === '') {
+            feedback.textContent = '';
+            feedback.className = '';
+            return;
+        }
+        
+        // Check if it's an email format
+        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+        
+        if (emailRegex.test(value)) {
+            feedback.textContent = '✓ Valid email format';
+            feedback.className = 'input-feedback success';
+        } else if (value.length >= 3) {
+            feedback.textContent = '✓ Valid username format';
+            feedback.className = 'input-feedback success';
+        } else {
+            feedback.textContent = '✗ Username must be at least 3 characters';
+            feedback.className = 'input-feedback error';
+        }
+    });
+
+    // Rate limiting: Disable submit button for 3 seconds after submission
+    const loginForm = document.querySelector('form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', function() {
+            const submitBtn = this.querySelector('button[type=\"submit\"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Logging in...';
+            
+            // Re-enable after 3 seconds (for security against brute force)
+            setTimeout(function() {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class=\"fas fa-sign-in-alt\"></i> Login to Account';
+            }, 3000);
+        });
+    }
+
+    // Remember Me - Store username in localStorage if checked
+    document.addEventListener('DOMContentLoaded', function() {
+        const rememberCheckbox = document.getElementById('remember_me');
+        const usernameInput = document.getElementById('username');
+        
+        // Load saved username if exists
+        const savedUsername = localStorage.getItem('fashionhub_remember_me');
+        if (savedUsername) {
+            usernameInput.value = savedUsername;
+            rememberCheckbox.checked = true;
+        }
+        
+        // Save on form submission
+        if (loginForm) {
+            loginForm.addEventListener('submit', function() {
+                if (rememberCheckbox.checked) {
+                    localStorage.setItem('fashionhub_remember_me', usernameInput.value);
+                } else {
+                    localStorage.removeItem('fashionhub_remember_me');
+                }
+            });
+        }
+    });
 </script>
 
 {% endblock content %}

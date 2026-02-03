@@ -114,17 +114,17 @@ class BannerAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'price', 'old_price', 'discount_percent', 'stock', 'category', 'rating', 'is_active', 'image_thumbnail')
-    list_filter = ('category', 'is_active', 'is_top_deal')
-    list_editable = ('category', 'is_active', 'price', 'stock')
+    list_display = ('id', 'name', 'price', 'old_price', 'discount_percent', 'stock', 'rating', 'is_active', 'image_thumbnail')
+    list_filter = ('is_active', 'is_top_deal')
+    list_editable = ('is_active', 'price', 'stock')
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ('name', 'id', 'slug')
     readonly_fields = ('image_preview',)
     
     fieldsets = (
         ('BASIC INFORMATION', {
-            'fields': ('name', 'slug', 'sku', 'category', 'is_active', 'is_top_deal'),
-            'description': 'Product name, SKU, category, and status'
+            'fields': ('name', 'slug', 'sku', 'is_active', 'is_top_deal'),
+            'description': 'Product name, SKU, and status'
         }),
         ('PRODUCT IMAGE', {
             'fields': ('image', 'image_preview'),

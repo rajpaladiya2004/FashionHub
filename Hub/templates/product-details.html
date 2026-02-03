@@ -118,6 +118,27 @@
         cursor: not-allowed;
         transform: none;
     }
+    
+    /* Hide any URL display in breadcrumb - aggressive fix */
+    .breadcrumb-item a::after,
+    .breadcrumb-item a::before,
+    .breadcrumb a::after,
+    .breadcrumb a::before,
+    .breadcrumb *::after,
+    .breadcrumb *::before {
+        content: none !important;
+        display: none !important;
+    }
+    .breadcrumb a {
+        text-decoration: none !important;
+    }
+    @media print {
+        .breadcrumb a::after,
+        .breadcrumb-item a::after {
+            content: none !important;
+            display: none !important;
+        }
+    }
 </style>
 
     <!-- breadcrumb__area-start -->
@@ -129,7 +150,8 @@
                             <nav aria-label="breadcrumb">
                                 <ol class="breadcrumb">
                                   <li class="breadcrumb-item"><a href="{% url 'index' %}">Home</a></li>
-                                  <li class="breadcrumb-item active" aria-current="page">Shop</li>
+                                  <li class="breadcrumb-item"><a href="{% url 'shop' %}">Shop</a></li>
+                                  <li class="breadcrumb-item active" aria-current="page">{{ product.name|truncatewords:5 }}</li>
                                 </ol>
                               </nav>
                         </div>
@@ -261,33 +283,11 @@
                                     </button>
                                 </div>
                             </div>
-                            <div class="product-tag-area mt-15">
-                                <div class="product_info">
-                                    <span class="sku_wrapper">
-                                        <span class="title">SKU:</span>
-                                        <span class="sku">{{ product.sku|default:product.slug }}</span>
-                                    </span>
-                                    <span class="posted_in">
-                                        <span class="title">Categories:</span>
-                                        <a href="{% url 'shop' %}?category={{ product.category }}">{{ product.get_category_display|default:"General" }}</a>
-                                    </span>
-                                    {% if product.tags %}
-                                    <span class="tagged_as">
-                                        <span class="title">Tags:</span>
-                                        {% for tag in product.get_tags_list %}
-                                            <a href="#">{{ tag }}</a>{% if not forloop.last %}, {% endif %}
-                                        {% endfor %}
-                                    </span>
-                                    {% endif %}
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- product-details-end -->
-
         <!-- product-details-des-start -->
         <div class="product-details-des mt-40 mb-60">
             <div class="container">

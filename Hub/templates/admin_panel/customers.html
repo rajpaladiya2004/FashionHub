@@ -206,7 +206,7 @@
                             <td>
                                 <input type="checkbox" name="customer_ids" value="{{ customer.id }}" class="customer-checkbox">
                             </td>
-                            <td><strong>#{{ customer.id }}</strong></td>
+                            <td><strong>#{{ customers.start_index|add:forloop.counter0 }}</strong></td>
                             <td>
                                 <div class="d-flex align-items-center">
                                     {% if customer.userprofile.profile_image %}

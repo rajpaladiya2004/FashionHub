@@ -43,8 +43,9 @@
                 {% if messages %}
                     <div class="mb-30">
                         {% for message in messages %}
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                <i class="fas fa-exclamation-circle"></i> {{ message }}
+                            <div class="alert alert-{{ message.tags|default:'danger' }} alert-dismissible fade show" role="alert">
+                                <i class="fas fa-{% if message.tags == 'success' %}check-circle{% else %}exclamation-circle{% endif %}"></i> 
+                                <strong>{% if message.tags == 'success' %}Success!{% else %}Error!{% endif %}</strong> {{ message }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         {% endfor %}
@@ -113,8 +114,9 @@
                                     <label class="form-label">Email <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                                        <input type="email" name="email" class="form-control" placeholder="Your email address" required>
+                                        <input type="email" name="email" id="email" class="form-control" placeholder="Your email address" required>
                                     </div>
+                                    <span id="email_feedback" class="input-feedback"></span>
                                 </div>
                             </div>
                         </div>
@@ -160,6 +162,11 @@
                                             <button type="button" class="btn toggle-password-btn" onclick="togglePassword('password')">
                                                 <i class="fas fa-eye"></i>
                                             </button>
+                                        </div>
+                                        <!-- Password Strength Indicator -->
+                                        <div class="password-strength-container mt-2" style="display: none;" id="strength_container">
+                                            <div class="password-strength-bar"><div id="strength_bar" class="strength-fill"></div></div>
+                                            <span id="strength_text" class="password-strength-text">Password strength: Weak</span>
                                         </div>
                                     </div>
                                 </div>
@@ -359,6 +366,72 @@
         margin-right: 8px;
     }
 
+    .password-strength-container {
+        margin-top: 8px;
+    }
+
+    .password-strength-bar {
+        width: 100%;
+        height: 6px;
+        background: #e5e7eb;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 6px;
+    }
+
+    .strength-fill {
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s ease, background-color 0.3s ease;
+        background-color: #e74c3c;
+    }
+
+    .strength-fill.weak {
+        width: 25%;
+        background-color: #e74c3c;
+    }
+
+    .strength-fill.fair {
+        width: 50%;
+        background-color: #f39c12;
+    }
+
+    .strength-fill.good {
+        width: 75%;
+        background-color: #3498db;
+    }
+
+    .strength-fill.strong {
+        width: 100%;
+        background-color: #27ae60;
+    }
+
+    .password-strength-text {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .input-feedback {
+        display: none;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .input-feedback.error {
+        color: #e74c3c;
+        display: block;
+    }
+
+    .input-feedback.success {
+        color: #27ae60;
+        display: block;
+    }
+
+    .input-feedback.warning {
+        color: #f39c12;
+        display: block;
+    }
+
     .login-link-section {
         padding-top: 20px;
         border-top: 1px solid #ddd;
@@ -401,15 +474,117 @@
     const password = document.getElementById('password');
     const confirm_password = document.getElementById('confirm_password');
     const password_error = document.getElementById('password_error');
+    const emailInput = document.getElementById('email');
+    const emailFeedback = document.getElementById('email_feedback');
+    const strengthBar = document.getElementById('strength_bar');
+    const strengthText = document.getElementById('strength_text');
+    const strengthContainer = document.getElementById('strength_container');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    // Email Validation
+    emailInput.addEventListener('blur', function() {
+        const value = this.value.trim();
+        if (value === '') {
+            emailFeedback.textContent = '';
+            emailFeedback.className = '';
+            return;
+        }
+        if (emailRegex.test(value)) {
+            emailFeedback.textContent = '✓ Valid email';
+            emailFeedback.className = 'input-feedback success';
+        } else {
+            emailFeedback.textContent = '✗ Invalid email';
+            emailFeedback.className = 'input-feedback error';
+        }
+    });
+
+    // Password Strength Calculation
+    function calculatePasswordStrength(pwd) {
+        let strength = 0;
+        if (pwd.length >= 8) strength++;
+        if (pwd.length >= 12) strength++;
+        if (/[a-z]/.test(pwd)) strength++;
+        if (/[A-Z]/.test(pwd)) strength++;
+        if (/[0-9]/.test(pwd)) strength++;
+        if (/[^a-zA-Z0-9]/.test(pwd)) strength++;
+        return strength;
+    }
+
+    // Password Strength Indicator
+    password.addEventListener('input', function() {
+        const value = this.value;
+        strengthContainer.style.display = value.length > 0 ? 'block' : 'none';
+        
+        if (value.length === 0) {
+            strengthBar.className = 'strength-fill';
+            strengthText.textContent = 'Password strength: Weak';
+            return;
+        }
+        
+        const strength = calculatePasswordStrength(value);
+        strengthBar.className = 'strength-fill';
+        
+        if (strength <= 2) {
+            strengthBar.classList.add('weak');
+            strengthText.textContent = '✗ Weak';
+            strengthText.style.color = '#e74c3c';
+        } else if (strength <= 3) {
+            strengthBar.classList.add('fair');
+            strengthText.textContent = '⚠ Fair';
+            strengthText.style.color = '#f39c12';
+        } else if (strength <= 4) {
+            strengthBar.classList.add('good');
+            strengthText.textContent = '✓ Good';
+            strengthText.style.color = '#3498db';
+        } else {
+            strengthBar.classList.add('strong');
+            strengthText.textContent = '✓ Strong';
+            strengthText.style.color = '#27ae60';
+        }
+    });
+
+    // Password Match Validation
     if (confirm_password) {
         confirm_password.addEventListener('keyup', () => {
             if (password.value !== confirm_password.value) {
-                password_error.textContent = "Passwords do not match";
+                password_error.textContent = '✗ Passwords do not match';
                 password_error.style.display = 'block';
+                password_error.style.color = '#e74c3c';
+            } else if (password.value.length > 0) {
+                password_error.textContent = '✓ Passwords match';
+                password_error.style.display = 'block';
+                password_error.style.color = '#27ae60';
             } else {
-                password_error.textContent = "";
+                password_error.textContent = '';
                 password_error.style.display = 'none';
+            }
+        });
+    }
+
+    // Form Submission Validation
+    const registerForm = document.querySelector('form');
+    if (registerForm) {
+        registerForm.addEventListener('submit', function(e) {
+            const emailValue = emailInput.value.trim();
+            const passwordValue = password.value;
+            
+            if (!emailRegex.test(emailValue)) {
+                e.preventDefault();
+                emailFeedback.textContent = '✗ Invalid email';
+                emailFeedback.className = 'input-feedback error';
+                return false;
+            }
+            
+            if (calculatePasswordStrength(passwordValue) < 3) {
+                e.preventDefault();
+                alert('Password must be strong: Use uppercase, lowercase, numbers & special characters.');
+                return false;
+            }
+            
+            const submitBtn = this.querySelector('button[type=\"submit\"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Creating Account...';
             }
         });
     }

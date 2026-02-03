@@ -157,6 +157,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Auth redirect
+LOGIN_URL = '/login/'
+
 # Razorpay Payment Gateway Settings
 RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='your_razorpay_key_id')
 RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='your_razorpay_key_secret')
