@@ -65,25 +65,12 @@ urlpatterns = [
     
     # Order Management URLs
     path('orders/', views.order_list, name='order_list'),
-    path('track-order/', views.track_order_page, name='track_order'),
     path('order/download-invoice/<str:order_number>/', views.download_invoice, name='download_invoice'),
     path('order/<str:order_number>/', views.order_details, name='order_details'),
     path('order/track/<str:order_number>/', views.order_tracking, name='order_tracking'),
-    path('order/cancel/<int:order_id>/', views.customer_cancel_order, name='customer_cancel_order'),
     
     # Review URLs
     path('product/<int:product_id>/submit-review/', views.submit_review, name='submit_review'),
     path('review/<int:review_id>/vote/', views.vote_review, name='vote_review'),
     path('product/<int:product_id>/submit-question/', views.submit_question, name='submit_question'),
-    path('product/<int:product_id>/notify/', views.request_stock_notification, name='request_stock_notification'),
-    
-    # Password Reset URLs
-    path('password_reset/', views.password_reset_view, name='password_reset'),
-    path('password_reset_done/', views.password_reset_done_view, name='password_reset_done'),
-    path('password_reset_confirm/<uidb64>/<token>/', views.password_reset_confirm_view, name='password_reset_confirm'),
-    path('password_reset_complete/', views.password_reset_complete_view, name='password_reset_complete'),
-
-    # Email Verification URLs
-    path('verify-email/', views.verify_email_sent, name='verify_email_sent'),
-    path('verify-email/<uidb64>/<token>/', views.verify_email, name='verify_email'),
 ]
