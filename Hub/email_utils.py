@@ -258,14 +258,18 @@ def send_admin_order_notification(order, request):
         bool: True if email sent successfully
     """
     try:
-        # Get admin email from settings or use superuser email
+        # Get admin emails from multiple sources
         from django.contrib.auth.models import User
         admin_users = User.objects.filter(is_superuser=True)
-        if not admin_users.exists():
-            logger.warning("No admin users found to send order notification")
-            return False
         
-        admin_emails = [admin.email for admin in admin_users if admin.email]
+        # Collect admin emails from superusers
+        admin_emails = list(set([admin.email for admin in admin_users if admin.email]))
+        
+        # Add additional admin email for notifications
+        additional_admin_email = 'rajpaladiya2023@gmail.com'
+        if additional_admin_email and additional_admin_email not in admin_emails:
+            admin_emails.append(additional_admin_email)
+        
         if not admin_emails:
             logger.warning("No admin emails found")
             return False

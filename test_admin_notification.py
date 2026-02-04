@@ -21,7 +21,12 @@ print("=" * 60)
 
 # Get admin emails
 admin_users = User.objects.filter(is_superuser=True)
-admin_emails = [admin.email for admin in admin_users if admin.email]
+admin_emails = list(set([admin.email for admin in admin_users if admin.email]))
+
+# Add additional admin email
+additional_admin_email = 'rajpaladiya2023@gmail.com'
+if additional_admin_email and additional_admin_email not in admin_emails:
+    admin_emails.append(additional_admin_email)
 
 print(f"\nAdmin Users Found: {admin_users.count()}")
 for admin in admin_users:
