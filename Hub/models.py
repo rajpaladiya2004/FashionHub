@@ -757,7 +757,7 @@ class OrderStatusHistory(models.Model):
 class AdminEmailSettings(models.Model):
     """Configurable admin email settings"""
     setting_name = models.CharField(max_length=100, default="order_notifications")
-    admin_email = models.EmailField(default="rajpaladiya2023@gmail.com", help_text="Email to receive order notifications")
+    admin_email = models.EmailField(default="info.vibemall@gmail.com", help_text="Email to receive order notifications")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
