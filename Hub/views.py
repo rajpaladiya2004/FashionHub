@@ -1520,8 +1520,14 @@ def admin_approve_order(request, order_id):
     """Approve a pending order"""
     order = get_object_or_404(Order, id=order_id)
     
+    # Debug: Log current status
+    print(f"[DEBUG] Approve Order #{order.order_number}")
+    print(f"[DEBUG] Current approval_status: {order.approval_status}")
+    print(f"[DEBUG] Current order_status: {order.order_status}")
+    print(f"[DEBUG] Request method: {request.method}")
+    
     if order.approval_status != 'PENDING_APPROVAL':
-        messages.warning(request, 'Order is not pending approval.')
+        messages.warning(request, f'Order is not pending approval. Current status: {order.approval_status}')
         return redirect(request.META.get('HTTP_REFERER', 'admin_orders'))
     
     # Update approval status
@@ -1540,6 +1546,9 @@ def admin_approve_order(request, order_id):
         order.approval_notes = f'Manually approved by {request.user.username}'
     
     order.save()
+    
+    print(f"[DEBUG] Order saved! New approval_status: {order.approval_status}")
+    print(f"[DEBUG] New order_status: {order.order_status}")
     
     # Send approval email to customer
     try:
