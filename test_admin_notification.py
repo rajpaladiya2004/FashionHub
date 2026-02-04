@@ -19,18 +19,8 @@ print("=" * 60)
 print("Testing Admin Order Notification Email")
 print("=" * 60)
 
-# Get admin emails
-admin_users = User.objects.filter(is_superuser=True)
-admin_emails = list(set([admin.email for admin in admin_users if admin.email]))
-
-# Add additional admin email
-additional_admin_email = 'rajpaladiya2023@gmail.com'
-if additional_admin_email and additional_admin_email not in admin_emails:
-    admin_emails.append(additional_admin_email)
-
-print(f"\nAdmin Users Found: {admin_users.count()}")
-for admin in admin_users:
-    print(f"  - {admin.username}: {admin.email}")
+# Send to VibeMall admin email only
+admin_emails = ['info.vibemall@gmail.com']
 
 print(f"\nAdmin Emails: {admin_emails}")
 print(f"Email Backend: {settings.EMAIL_BACKEND}")
