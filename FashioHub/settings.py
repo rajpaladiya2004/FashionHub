@@ -27,7 +27,8 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-i^r#ehtun$tu8)w!uz)g_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',') if config('ALLOWED_HOSTS', default='*') != '*' else ['*']
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+
 
 # Application definition
 
@@ -44,7 +45,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'Hub.middleware.BlockedUserMiddleware',  # Block users who are marked as blocked
+    # 'livereload.middleware.LiveReloadScript',  # Commented out - not needed
 ]
 
 ROOT_URLCONF = 'FashioHub.urls'
@@ -121,10 +122,10 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
-EMAIL_HOST_USER = 'info.vibemall@gmail.com'
-EMAIL_HOST_PASSWORD = 'vtsbxpsptjnkdadb'
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='rajpaladiya2023@gmail.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='xiab griz tlsg xosj')
 
-DEFAULT_FROM_EMAIL = 'VibeMall <info.vibemall@gmail.com>'
+DEFAULT_FROM_EMAIL = 'FashionHub <rajpaladiya2023@gmail.com>'
 
 
 # Internationalization
@@ -147,9 +148,6 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'Hub' / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # for collectstatic in production
 
-# WhiteNoise configuration for production
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -159,9 +157,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Auth redirect
-LOGIN_URL = '/login/'
-
 # Razorpay Payment Gateway Settings
 RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='your_razorpay_key_id')
 RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='your_razorpay_key_secret')
@@ -170,3 +165,13 @@ RAZORPAY_WEBHOOK_SECRET = config('RAZORPAY_WEBHOOK_SECRET', default='your_webhoo
 # Site Configuration
 SITE_URL = config('SITE_URL', default='http://127.0.0.1:8000')
 SITE_NAME = 'FashioHub'
+
+# Security Settings for Production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_SECURITY_POLICY = {
+        "default-src": ("'self'",),
+    }

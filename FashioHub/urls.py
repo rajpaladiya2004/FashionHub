@@ -40,9 +40,5 @@ urlpatterns = [
     path('add-product/', views.add_product, name='add_product'),
     path('add-product/', views.add_product, name='add_product'),
 ]
-
-# Serve media files in development and on Render
-if settings.DEBUG or 'RENDER' in os.environ:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
