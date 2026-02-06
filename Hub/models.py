@@ -3,6 +3,21 @@ from django.contrib.auth.models import User
 from django.utils.text import slugify
 from django.utils import timezone
 
+class PasswordResetLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    email = models.EmailField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=[('requested', 'Requested'), ('success', 'Success'), ('failed', 'Failed')])
+    reason = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.email} ({self.status}) at {self.timestamp}"
+from django.db import models
+from django.contrib.auth.models import User
+from django.utils.text import slugify
+from django.utils import timezone
+
 class CategoryIcon(models.Model):
     """Category icons for Shop By Department section"""
     name = models.CharField(max_length=100, help_text="Category name (e.g., Mobiles, Food & Health)")
@@ -754,6 +769,57 @@ class OrderStatusHistory(models.Model):
         return f"Order #{self.order.order_number} - {self.old_status} → {self.new_status}"
 
 
+class ChatThread(models.Model):
+    """Customer support chat thread"""
+    STATUS_CHOICES = [
+        ('OPEN', 'Open'),
+        ('CLOSED', 'Closed'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='chat_threads')
+    guest_name = models.CharField(max_length=120, blank=True)
+    guest_email = models.EmailField(blank=True)
+    session_key = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
+    last_message_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-last_message_at', '-created_at']
+
+    def display_name(self):
+        if self.user:
+            return self.user.get_full_name() or self.user.username
+        return self.guest_name or 'Guest'
+
+
+class ChatMessage(models.Model):
+    """Individual messages in a support chat thread"""
+    SENDER_CHOICES = [
+        ('USER', 'User'),
+        ('ADMIN', 'Admin'),
+    ]
+
+    thread = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='messages')
+    sender_type = models.CharField(max_length=10, choices=SENDER_CHOICES)
+    message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+
+class ChatAttachment(models.Model):
+    """Files shared in a support chat message"""
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='ChatMedia/')
+    original_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100, blank=True)
+    size_bytes = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class AdminEmailSettings(models.Model):
     """Configurable admin email settings"""
     setting_name = models.CharField(max_length=100, default="order_notifications")
@@ -1014,6 +1080,30 @@ class EmailLog(models.Model):
     
     def __str__(self):
         return f"{self.email_type} to {self.email_to}"
+
+
+class MainPageProduct(models.Model):
+    """Manage products displayed on main page by category"""
+    CATEGORY_CHOICES = [
+        ('category1', 'Category 1'),
+        ('category2', 'Category 2'),
+        ('category3', 'Category 3'),
+        ('category4', 'Category 4'),
+    ]
+    
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='main_page_items')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    order = models.PositiveIntegerField(default=0, help_text="Display order (lower numbers appear first)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['category', 'order']
+        unique_together = ['product', 'category']
+        verbose_name_plural = "Main Page Products"
+    
+    def __str__(self):
+        return f"{self.product.name} - {self.get_category_display()}"
 
 
 class SiteSettings(models.Model):

@@ -199,6 +199,12 @@
                 <div data-i18n="Dashboard">Dashboard</div>
               </a>
             </li>
+            <li class="menu-item">
+              <a href="/admin/new-dashboard/" class="menu-link">
+                <i class="menu-icon tf-icons bx bx-bar-chart-alt-2"></i>
+                <div data-i18n="NewDashboard">NewDashboard</div>
+              </a>
+            </li>
 
             <!-- Products -->
             <li class="menu-item">
@@ -222,6 +228,11 @@
                     <div data-i18n="Categories">Categories</div>
                   </a>
                 </li>
+                <li class="menu-item">
+                  <a href="/admin-panel/main-page-products/" class="menu-link">
+                    <div data-i18n="Main Page Category">🏠 Main Page Category</div>
+                  </a>
+                </li>
               </ul>
             </li>
 
@@ -230,6 +241,13 @@
               <a href="/admin-panel/orders/" class="menu-link">
                 <i class="menu-icon tf-icons bx bx-receipt"></i>
                 <div data-i18n="Orders">Orders</div>
+              </a>
+            </li>
+
+            <li class="menu-item">
+              <a href="/admin-panel/chat/" class="menu-link">
+                <i class="menu-icon tf-icons bx bx-message"></i>
+                <div data-i18n="Chat">Chat</div>
               </a>
             </li>
 
@@ -356,7 +374,7 @@
                 <li class="nav-item navbar-dropdown dropdown-user dropdown">
                   <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown">
                     <div class="avatar avatar-online">
-                      {% if user.is_authenticated and user.userprofile.profile_image %}
+                      {% if user.is_authenticated and user.userprofile.profile_image and user.userprofile.profile_image.name != 'profile_images/default.png' %}
                       <img src="{{ user.userprofile.profile_image.url }}" alt="{{ user.username }}" class="w-px-40 h-auto rounded-circle" />
                       {% else %}
                       <img src="{% static 'admin/assets/img/avatars/1.png' %}" alt="Admin" class="w-px-40 h-auto rounded-circle" />
@@ -369,7 +387,7 @@
                         <div class="d-flex">
                           <div class="flex-shrink-0 me-3">
                             <div class="avatar avatar-online">
-                              {% if user.is_authenticated and user.userprofile.profile_image %}
+                              {% if user.is_authenticated and user.userprofile.profile_image and user.userprofile.profile_image.name != 'profile_images/default.png' %}
                               <img src="{{ user.userprofile.profile_image.url }}" alt="{{ user.username }}" class="w-px-40 h-auto rounded-circle" />
                               {% else %}
                               <img src="{% static 'admin/assets/img/avatars/1.png' %}" alt="Admin" class="w-px-40 h-auto rounded-circle" />

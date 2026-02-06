@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>New Chat Message</title>
+</head>
+<body style="font-family: Arial, sans-serif; background: #f5f7fb; padding: 24px;">
+  <div style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb;">
+    <h2 style="margin: 0 0 12px; color: #0f172a;">New customer message</h2>
+    <p style="margin: 0 0 12px; color: #334155;">A customer sent a new chat message.</p>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px;">
+      <p style="margin: 0 0 6px;"><strong>Name:</strong> {{ thread.display_name }}</p>
+      <p style="margin: 0 0 6px;"><strong>Email:</strong> {% if thread.user and thread.user.email %}{{ thread.user.email }}{% else %}{{ thread.guest_email }}{% endif %}</p>
+      <p style="margin: 0;"><strong>Message:</strong> {{ message }}</p>
+    </div>
+    <p style="margin: 16px 0 0; color: #64748b; font-size: 12px;">Open the admin panel to reply.</p>
+  </div>
+</body>
+</html>

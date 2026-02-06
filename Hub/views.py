@@ -13,7 +13,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.conf import settings
 from django.urls import reverse
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
@@ -23,7 +23,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 import logging
 
-from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction
+from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction, MainPageProduct, ChatThread, ChatMessage, ChatAttachment
 from .email_utils import send_order_confirmation_email, send_order_status_update_email, send_admin_order_notification
 
 # ===== ADMIN PANEL VIEWS =====
@@ -377,6 +377,434 @@ def admin_dashboard(request):
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_new_dashboard(request):
+    """New admin analytics dashboard (read-only)"""
+    from datetime import timedelta
+    from django.db.models.functions import TruncDate
+    import json
+
+    today = timezone.localdate()
+    range_key = request.GET.get('range', 'this_week')
+    range_key = range_key if range_key in {'today', 'yesterday', 'this_week', 'last_week', 'this_month', 'this_year'} else 'this_week'
+
+    if range_key == 'today':
+        start_date = today
+        end_date = today
+        range_label = 'Today'
+    elif range_key == 'yesterday':
+        start_date = today - timedelta(days=1)
+        end_date = start_date
+        range_label = 'Yesterday'
+    elif range_key == 'last_week':
+        start_date = today - timedelta(days=13)
+        end_date = today - timedelta(days=7)
+        range_label = 'Last Week'
+    elif range_key == 'this_month':
+        start_date = today.replace(day=1)
+        end_date = today
+        range_label = 'This Month'
+    elif range_key == 'this_year':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+        range_label = 'This Year'
+    else:
+        start_date = today - timedelta(days=6)
+        end_date = today
+        range_label = 'This Week'
+
+    profit_margin = Decimal('0.30')
+    paid_orders = Order.objects.filter(payment_status='PAID')
+
+    revenue_qs = paid_orders.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+    revenue_by_day = revenue_qs.annotate(day=TruncDate('created_at')).values('day').annotate(total=Sum('total_amount'))
+    orders_by_day = Order.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date).annotate(day=TruncDate('created_at')).values('day').annotate(total=Count('id'))
+    transactions_by_day = revenue_qs.annotate(day=TruncDate('created_at')).values('day').annotate(total=Count('id'))
+    visitors_by_day = User.objects.filter(date_joined__date__gte=start_date, date_joined__date__lte=end_date).annotate(day=TruncDate('date_joined')).values('day').annotate(total=Count('id'))
+    customers_by_day = Order.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date).annotate(day=TruncDate('created_at')).values('day').annotate(total=Count('user', distinct=True))
+
+    revenue_map = {item['day']: item['total'] or Decimal('0') for item in revenue_by_day}
+    orders_map = {item['day']: item['total'] or 0 for item in orders_by_day}
+    transactions_map = {item['day']: item['total'] or 0 for item in transactions_by_day}
+    visitors_map = {item['day']: item['total'] or 0 for item in visitors_by_day}
+    customers_map = {item['day']: item['total'] or 0 for item in customers_by_day}
+
+    labels = []
+    revenue_series = []
+    orders_series = []
+    profit_series = []
+    expense_series = []
+    visitors_series = []
+    customers_series = []
+    transactions_series = []
+
+    day_count = (end_date - start_date).days + 1
+    for i in range(day_count):
+        day = start_date + timedelta(days=i)
+        labels.append(day.strftime('%b %d'))
+        day_revenue = revenue_map.get(day, Decimal('0'))
+        revenue_series.append(float(day_revenue))
+        orders_series.append(int(orders_map.get(day, 0)))
+        profit_value = day_revenue * profit_margin
+        profit_series.append(float(profit_value))
+        expense_series.append(float(day_revenue - profit_value))
+        visitors_series.append(int(visitors_map.get(day, 0)))
+        customers_series.append(int(customers_map.get(day, 0)))
+        transactions_series.append(int(transactions_map.get(day, 0)))
+
+    total_revenue = sum(revenue_series)
+    total_profit = sum(profit_series)
+    total_expenses = sum(expense_series)
+    total_orders = sum(orders_series)
+    total_visitors = sum(visitors_series)
+    total_customers = Order.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date).values('user').distinct().count()
+    total_transactions = sum(transactions_series)
+
+    cards = [
+        {'key': 'orders', 'title': 'Orders', 'value': total_orders, 'is_money': False, 'series': json.dumps(orders_series), 'color': '#2563eb', 'chart_id': 'ordersChart'},
+        {'key': 'expenses', 'title': 'Expenses', 'value': total_expenses, 'is_money': True, 'series': json.dumps(expense_series), 'color': '#dc2626', 'chart_id': 'expensesChart'},
+        {'key': 'profit', 'title': 'Profit', 'value': total_profit, 'is_money': True, 'series': json.dumps(profit_series), 'color': '#16a34a', 'chart_id': 'profitChart'},
+        {'key': 'sales', 'title': 'Sales', 'value': total_revenue, 'is_money': True, 'series': json.dumps(revenue_series), 'color': '#0ea5e9', 'chart_id': 'salesChart'},
+        {'key': 'visitors', 'title': 'Visitors', 'value': total_visitors, 'is_money': False, 'series': json.dumps(visitors_series), 'color': '#8b5cf6', 'chart_id': 'visitorsChart'},
+        {'key': 'customers', 'title': 'Customers', 'value': total_customers, 'is_money': False, 'series': json.dumps(customers_series), 'color': '#f59e0b', 'chart_id': 'customersChart'},
+        {'key': 'transactions', 'title': 'Transactions', 'value': total_transactions, 'is_money': False, 'series': json.dumps(transactions_series), 'color': '#14b8a6', 'chart_id': 'transactionsChart'},
+    ]
+
+    excluded_categories = {'TOP_DEALS', 'TOP_SELLING', 'TOP_FEATURED', 'RECOMMENDED'}
+    category_rows = (
+        OrderItem.objects.filter(
+            order__created_at__date__gte=start_date,
+            order__created_at__date__lte=end_date
+        )
+        .values('product__category')
+        .annotate(total=Sum('quantity'))
+    )
+    category_totals_map = {row['product__category']: int(row['total'] or 0) for row in category_rows}
+
+    category_colors = [
+        '#60a5fa',
+        '#f59e0b',
+        '#fb7185',
+        '#22c55e',
+        '#a78bfa',
+        '#38bdf8',
+        '#f97316',
+        '#84cc16',
+        '#c084fc',
+        '#f472b6',
+        '#2dd4bf',
+        '#94a3b8',
+    ]
+
+    category_labels = []
+    category_counts = []
+    category_list = []
+    icon_categories = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
+
+    for idx, icon in enumerate(icon_categories):
+        category_key = icon.category_key
+        if category_key in excluded_categories:
+            continue
+        total = category_totals_map.get(category_key, 0)
+        color = category_colors[idx % len(category_colors)]
+        category_labels.append(icon.name)
+        category_counts.append(total)
+        category_list.append({'label': icon.name, 'total': total, 'color': color})
+
+    icon_keys = {icon.category_key for icon in icon_categories}
+    other_total = 0
+    for category_key, total in category_totals_map.items():
+        if category_key in icon_keys or category_key in excluded_categories:
+            continue
+        other_total += total
+    if other_total:
+        color = category_colors[len(category_labels) % len(category_colors)]
+        category_labels.append('Other')
+        category_counts.append(other_total)
+        category_list.append({'label': 'Other', 'total': other_total, 'color': color})
+
+    context = {
+        'range_key': range_key,
+        'range_label': range_label,
+        'chart_labels': json.dumps(labels),
+        'cards': cards,
+        'category_labels': json.dumps(category_labels),
+        'category_counts': json.dumps(category_counts),
+        'category_list': category_list,
+        'category_colors': json.dumps(category_colors[:len(category_labels)]),
+    }
+
+    return render(request, 'admin_panel/new_dashboard.html', context)
+
+
+def _ensure_session_key(request):
+    if not request.session.session_key:
+        request.session.save()
+
+
+def _get_admin_chat_email():
+    admin_settings = AdminEmailSettings.objects.filter(is_active=True).first()
+    return admin_settings.admin_email if admin_settings else 'info.vibemall@gmail.com'
+
+
+def _get_thread_for_request(request, thread_id=None):
+    thread = None
+    if thread_id:
+        try:
+            thread = ChatThread.objects.get(id=thread_id)
+        except ChatThread.DoesNotExist:
+            thread = None
+
+        if thread:
+            if request.user.is_authenticated:
+                if thread.user_id != request.user.id:
+                    thread = None
+            else:
+                _ensure_session_key(request)
+                if thread.session_key != request.session.session_key:
+                    thread = None
+
+    if not thread:
+        if request.user.is_authenticated:
+            thread = ChatThread.objects.filter(user=request.user, status='OPEN').order_by('-last_message_at', '-created_at').first()
+        else:
+            _ensure_session_key(request)
+            thread = ChatThread.objects.filter(session_key=request.session.session_key, status='OPEN').order_by('-last_message_at', '-created_at').first()
+
+    if not thread:
+        thread = ChatThread.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            session_key=request.session.session_key if not request.user.is_authenticated else ''
+        )
+
+    return thread
+
+
+def _send_admin_chat_email(thread, message_text):
+    admin_email = _get_admin_chat_email()
+    if not admin_email:
+        return
+
+    subject = f"New chat message - {thread.display_name()}"
+    html_content = render_to_string('emails/chat_admin_notify.html', {
+        'thread': thread,
+        'message': message_text,
+    })
+    text_content = f"""New customer message
+
+From: {thread.display_name()}
+Email: {thread.user.email if thread.user else thread.guest_email}
+
+Message:
+{message_text}
+"""
+
+    email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [admin_email])
+    email.attach_alternative(html_content, "text/html")
+    email.send(fail_silently=True)
+
+
+def _send_user_chat_email(thread, message_text):
+    recipient = None
+    if thread.user and thread.user.email:
+        recipient = thread.user.email
+    elif thread.guest_email:
+        recipient = thread.guest_email
+
+    if not recipient:
+        return
+
+    subject = "Support reply from VibeMall"
+    html_content = render_to_string('emails/chat_user_reply.html', {
+        'thread': thread,
+        'message': message_text,
+    })
+    text_content = f"""Support reply
+
+Hello {thread.display_name()},
+
+{message_text}
+"""
+
+    email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [recipient])
+    email.attach_alternative(html_content, "text/html")
+    email.send(fail_silently=True)
+
+
+def _validate_chat_attachments(files):
+    allowed_ext = {'.jpg', '.jpeg', '.png', '.webp', '.mp4', '.pdf', '.doc', '.docx'}
+    allowed_types = {
+        'image/jpeg', 'image/png', 'image/webp',
+        'video/mp4',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+    max_size = 25 * 1024 * 1024
+
+    for f in files:
+        if f.size > max_size:
+            return f"File {f.name} exceeds 25 MB."
+        name_lower = (f.name or '').lower()
+        if not any(name_lower.endswith(ext) for ext in allowed_ext):
+            return f"File type not allowed: {f.name}."
+        if f.content_type and f.content_type not in allowed_types:
+            return f"File type not allowed: {f.name}."
+    return None
+
+
+def chat_thread(request):
+    thread_id = request.GET.get('thread_id')
+    thread = _get_thread_for_request(request, thread_id)
+
+    messages_qs = thread.messages.prefetch_related('attachments').order_by('created_at')[:50]
+    messages_data = [
+        {
+            'sender': msg.sender_type,
+            'message': msg.message,
+            'attachments': [
+                {
+                    'name': att.original_name,
+                    'url': att.file.url,
+                    'content_type': att.content_type,
+                    'is_image': (att.content_type or '').startswith('image/')
+                }
+                for att in msg.attachments.all()
+            ],
+            'created_at': msg.created_at.strftime('%d %b %H:%M')
+        }
+        for msg in messages_qs
+    ]
+
+    requires_profile = False
+    if not request.user.is_authenticated:
+        requires_profile = not (thread.guest_name and thread.guest_email)
+
+    return JsonResponse({
+        'thread_id': thread.id,
+        'messages': messages_data,
+        'requires_profile': requires_profile,
+        'guest_name': thread.guest_name,
+        'guest_email': thread.guest_email,
+    })
+
+
+@require_POST
+def chat_message(request):
+    message_text = (request.POST.get('message') or '').strip()
+    files = request.FILES.getlist('attachments')
+    if not message_text and not files:
+        return JsonResponse({'error': 'Message or attachment is required.'}, status=400)
+
+    error = _validate_chat_attachments(files)
+    if error:
+        return JsonResponse({'error': error}, status=400)
+
+    thread_id = request.POST.get('thread_id')
+    thread = _get_thread_for_request(request, thread_id)
+
+    if not request.user.is_authenticated:
+        guest_name = (request.POST.get('guest_name') or '').strip()
+        guest_email = (request.POST.get('guest_email') or '').strip()
+
+        if not (thread.guest_name and thread.guest_email):
+            if not guest_name or not guest_email:
+                return JsonResponse({'error': 'Name and email are required.'}, status=400)
+
+        if guest_name and not thread.guest_name:
+            thread.guest_name = guest_name
+        if guest_email and not thread.guest_email:
+            thread.guest_email = guest_email
+
+    message = ChatMessage.objects.create(
+        thread=thread,
+        sender_type='USER',
+        message=message_text
+    )
+    for f in files:
+        ChatAttachment.objects.create(
+            message=message,
+            file=f,
+            original_name=f.name,
+            content_type=f.content_type or '',
+            size_bytes=f.size
+        )
+    thread.last_message_at = timezone.now()
+    thread.save(update_fields=['last_message_at', 'guest_name', 'guest_email'])
+
+    notify_text = message_text or "Sent attachment(s)."
+    _send_admin_chat_email(thread, notify_text)
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': {
+            'sender': message.sender_type,
+            'message': message.message,
+            'attachments': [
+                {
+                    'name': att.original_name,
+                    'url': att.file.url,
+                    'content_type': att.content_type,
+                    'is_image': (att.content_type or '').startswith('image/')
+                }
+                for att in message.attachments.all()
+            ],
+            'created_at': message.created_at.strftime('%d %b %H:%M')
+        }
+    })
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_chat_list(request):
+    threads = ChatThread.objects.select_related('user').order_by('-last_message_at', '-created_at')
+    return render(request, 'admin_panel/chat_list.html', {'threads': threads})
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_chat_detail(request, thread_id):
+    thread = get_object_or_404(ChatThread, id=thread_id)
+
+    if request.method == 'POST':
+        message_text = (request.POST.get('message') or '').strip()
+        files = request.FILES.getlist('attachments')
+        if not message_text and not files:
+            messages.error(request, 'Message or attachment is required.')
+        else:
+            error = _validate_chat_attachments(files)
+            if error:
+                messages.error(request, error)
+            else:
+                message = ChatMessage.objects.create(
+                    thread=thread,
+                    sender_type='ADMIN',
+                    message=message_text
+                )
+                for f in files:
+                    ChatAttachment.objects.create(
+                        message=message,
+                        file=f,
+                        original_name=f.name,
+                        content_type=f.content_type or '',
+                        size_bytes=f.size
+                    )
+                thread.last_message_at = timezone.now()
+                thread.save(update_fields=['last_message_at'])
+                notify_text = message_text or "Sent attachment(s)."
+                _send_user_chat_email(thread, notify_text)
+                messages.success(request, 'Reply sent.')
+                return redirect('admin_chat_detail', thread_id=thread.id)
+
+    messages_qs = thread.messages.prefetch_related('attachments').order_by('created_at')
+    context = {
+        'thread': thread,
+        'messages_list': messages_qs,
+    }
+    return render(request, 'admin_panel/chat_detail.html', context)
+
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
 def admin_add_product(request):
@@ -418,6 +846,19 @@ def admin_add_product(request):
             descriptionImage = request.FILES.get('descriptionImage')
             gallery_images = request.FILES.getlist('gallery_images')
             
+            def normalize_sku(raw_sku):
+                cleaned = (raw_sku or '').strip()
+                if not cleaned:
+                    return None
+                unique_sku = cleaned
+                counter = 1
+                while Product.objects.filter(sku=unique_sku).exists():
+                    unique_sku = f"{cleaned}-{counter}"
+                    counter += 1
+                return unique_sku
+
+            sku = normalize_sku(sku)
+
             # Create product
             product = Product.objects.create(
                 name=name,
@@ -951,21 +1392,127 @@ def admin_delete_brand_partner(request, partner_id):
 
 @login_required(login_url='login')
 @staff_member_required(login_url='login')
+def admin_main_page_products(request):
+    """Manage products displayed on main page by category"""
+    from .models import MainPageProduct
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'add':
+            # Add product to main page
+            product_id = request.POST.get('product_id')
+            category = request.POST.get('category')
+            
+            if product_id and category:
+                try:
+                    product = Product.objects.get(id=product_id)
+                    # Check if already exists
+                    existing = MainPageProduct.objects.filter(product=product, category=category).first()
+                    if not existing:
+                        MainPageProduct.objects.create(product=product, category=category)
+                        messages.success(request, f'✓ {product.name} added to {category}')
+                    else:
+                        messages.warning(request, f'⚠ {product.name} already in {category}')
+                except Product.DoesNotExist:
+                    messages.error(request, 'Product not found')
+            return redirect('admin_main_page_products')
+            
+        elif action == 'remove':
+            # Remove product from main page
+            item_id = request.POST.get('item_id')
+            try:
+                item = MainPageProduct.objects.get(id=item_id)
+                product_name = item.product.name
+                item.delete()
+                messages.success(request, f'✓ {product_name} removed')
+            except MainPageProduct.DoesNotExist:
+                messages.error(request, 'Item not found')
+            return redirect('admin_main_page_products')
+            
+        elif action == 'update_order':
+            # Update display order
+            items = MainPageProduct.objects.all()
+            for item in items:
+                new_order = request.POST.get(f'order_{item.id}')
+                if new_order:
+                    item.order = int(new_order)
+                    item.save()
+            messages.success(request, '✓ Display order updated')
+            return redirect('admin_main_page_products')
+    
+    # Get all main page products organized by category
+    categories = [
+        ('category1', 'Category 1'),
+        ('category2', 'Category 2'),
+        ('category3', 'Category 3'),
+        ('category4', 'Category 4'),
+    ]
+    
+    main_page_items = MainPageProduct.objects.select_related('product').order_by('category', 'order')
+    
+    # Organize by category
+    category_products = {}
+    for cat_key, cat_name in categories:
+        category_products[cat_key] = {
+            'name': cat_name,
+            'products': main_page_items.filter(category=cat_key)
+        }
+    
+    # Get available products
+    available_products = Product.objects.filter(is_active=True).exclude(
+        id__in=MainPageProduct.objects.values_list('product_id', flat=True)
+    ).order_by('-sold', 'name')
+    
+    context = {
+        'categories': categories,
+        'category_products': category_products,
+        'available_products': available_products[:50],  # Limit to 50 for dropdown
+        'all_products_count': Product.objects.filter(is_active=True).count(),
+    }
+    
+    return render(request, 'admin_panel/main_page_products.html', context)
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
 def admin_reviews(request):
     """Admin Review Management Page"""
+    from django.db.models import Avg
+
+    def refresh_product_rating(product):
+        """Recalculate product rating and review count from approved reviews"""
+        approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+        if approved_reviews.exists():
+            product.review_count = approved_reviews.count()
+            avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+            product.rating = round(avg_rating, 1) if avg_rating else 0
+        else:
+            product.review_count = 0
+            product.rating = 0
+        product.save(update_fields=['review_count', 'rating'])
+
     # Handle bulk actions
     if request.method == 'POST':
         action = request.POST.get('action')
         review_ids = request.POST.getlist('review_ids')
         
         if action == 'approve' and review_ids:
+            product_ids = list(ProductReview.objects.filter(id__in=review_ids).values_list('product_id', flat=True))
             ProductReview.objects.filter(id__in=review_ids).update(is_approved=True)
+            for product in Product.objects.filter(id__in=product_ids):
+                refresh_product_rating(product)
             messages.success(request, f'{len(review_ids)} review(s) approved successfully!')
         elif action == 'reject' and review_ids:
+            product_ids = list(ProductReview.objects.filter(id__in=review_ids).values_list('product_id', flat=True))
             ProductReview.objects.filter(id__in=review_ids).update(is_approved=False)
+            for product in Product.objects.filter(id__in=product_ids):
+                refresh_product_rating(product)
             messages.success(request, f'{len(review_ids)} review(s) rejected successfully!')
         elif action == 'delete' and review_ids:
+            product_ids = list(ProductReview.objects.filter(id__in=review_ids).values_list('product_id', flat=True))
             ProductReview.objects.filter(id__in=review_ids).delete()
+            for product in Product.objects.filter(id__in=product_ids):
+                refresh_product_rating(product)
             messages.success(request, f'{len(review_ids)} review(s) deleted successfully!')
         
         return redirect('admin_reviews')
@@ -1218,13 +1765,29 @@ def admin_orders(request):
     elif suspicious_filter == '0':
         all_orders = all_orders.filter(order__is_suspicious=False)
     
-    # Date range filter
+    # Quick date range filter (Today, Yesterday, Last Week)
+    date_range = request.GET.get('date_range', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
-    if date_from:
-        all_orders = all_orders.filter(order__created_at__gte=date_from)
-    if date_to:
-        all_orders = all_orders.filter(order__created_at__lte=date_to)
+    
+    if date_range:
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        if date_range == 'today':
+            all_orders = all_orders.filter(order__created_at__date=today)
+        elif date_range == 'yesterday':
+            yesterday = today - timedelta(days=1)
+            all_orders = all_orders.filter(order__created_at__date=yesterday)
+        elif date_range == 'last_week':
+            last_week = today - timedelta(days=7)
+            all_orders = all_orders.filter(order__created_at__date__gte=last_week)
+    else:
+        # Manual date range filter (only if quick filter not used)
+        if date_from:
+            all_orders = all_orders.filter(order__created_at__gte=date_from)
+        if date_to:
+            all_orders = all_orders.filter(order__created_at__lte=date_to)
     
     # Search filter (Order ID, Customer name, Phone, Email, Product name)
     search_query = request.GET.get('search', '')
@@ -1337,6 +1900,7 @@ def admin_orders(request):
         'approval_filter': approval_filter,
         'suspicious_filter': suspicious_filter,
         'search_query': search_query,
+        'date_range': date_range,
         'date_from': date_from,
         'date_to': date_to,
         'sort_by': sort_by,
@@ -2342,13 +2906,33 @@ def index(request):
     banners = Banner.objects.filter(is_active=True)
     categories = CategoryIcon.objects.filter(is_active=True)
     
-    # Get latest active products for all sections
-    # Order by -id since newer products have higher IDs
-    latest_products = Product.objects.filter(is_active=True).order_by('-id')
-    top_deals = latest_products[:10]
-    top_selling = latest_products[:10]
-    top_featured = latest_products[:10]
-    recommended = latest_products[:10]
+    # Get products from MainPageProduct model (4 categories)
+    from .models import MainPageProduct
+    
+    category1_products = MainPageProduct.objects.filter(category='category1').select_related('product').order_by('order')
+    category2_products = MainPageProduct.objects.filter(category='category2').select_related('product').order_by('order')
+    category3_products = MainPageProduct.objects.filter(category='category3').select_related('product').order_by('order')
+    category4_products = MainPageProduct.objects.filter(category='category4').select_related('product').order_by('order')
+    
+    # Extract product objects and prepare for template (fallback to latest products if no main page products)
+    top_deals = [item.product for item in category1_products[:10]] if category1_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+    top_selling = [item.product for item in category2_products[:10]] if category2_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+    top_featured = [item.product for item in category3_products[:10]] if category3_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+    recommended = [item.product for item in category4_products[:10]] if category4_products.exists() else Product.objects.filter(is_active=True).order_by('-id')[:10]
+
+    # Build product rating stats for cards
+    product_ids = {p.id for p in list(top_deals) + list(top_selling) + list(top_featured) + list(recommended)}
+    stats_qs = ProductReview.objects.filter(product_id__in=product_ids, is_approved=True).values('product_id').annotate(
+        avg_rating=Avg('rating'),
+        review_count=Count('id')
+    )
+    product_stats = {
+        item['product_id']: {
+            'avg_rating': round(item['avg_rating'] or 0, 1),
+            'review_count': item['review_count']
+        }
+        for item in stats_qs
+    }
     
     countdown = DealCountdown.objects.filter(is_active=True).first()
     brand_partners = BrandPartner.objects.filter(is_active=True).order_by('order')
@@ -2402,6 +2986,7 @@ def index(request):
             'cart_product_ids': cart_product_ids,
             'brand_partners': brand_partners,
             'delivered_orders': delivered_orders,
+            'product_stats': product_stats,
         }
     )
 
@@ -2922,6 +3507,19 @@ def shop(request):
     except EmptyPage:
         products_page = paginator.page(paginator.num_pages)
 
+    product_ids = [p.id for p in products_page.object_list]
+    stats_qs = ProductReview.objects.filter(product_id__in=product_ids, is_approved=True).values('product_id').annotate(
+        avg_rating=Avg('rating'),
+        review_count=Count('id')
+    )
+    product_stats = {
+        item['product_id']: {
+            'avg_rating': round(item['avg_rating'] or 0, 1),
+            'review_count': item['review_count']
+        }
+        for item in stats_qs
+    }
+
     return render(request, 'shop.html', {
         'products': products_page,
         'banners': banners,
@@ -2933,6 +3531,7 @@ def shop(request):
         'selected_rating': min_rating or '',
         'wishlist_product_ids': wishlist_product_ids,
         'cart_product_ids': cart_product_ids,
+        'product_stats': product_stats,
     })
 def shop_details(request): return render(request, 'shop-details.html')
 
@@ -3068,30 +3667,32 @@ def password_reset_view(request):
     """Display password reset request form"""
     if request.method == 'POST':
         email = request.POST.get('email')
+        from .models import PasswordResetLog
+        ip = request.META.get('REMOTE_ADDR')
         try:
             user = User.objects.get(email=email)
             # Generate token and uid
             from django.contrib.auth.tokens import default_token_generator
             from django.utils.encoding import force_bytes
             from django.utils.http import urlsafe_base64_encode
-            
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            
-            # Send email (simplified - in production use Django's send_mail)
             reset_url = request.build_absolute_uri(
                 f"/password_reset_confirm/{uid}/{token}/"
             )
-            
-            # For demo purposes, show the reset link directly
-            # In production, send this via email
             request.session['reset_url'] = reset_url
             request.session['reset_email'] = email
-            
-            messages.success(request, f"Password reset link sent to {email}")
+            PasswordResetLog.objects.create(user=user, email=email, ip_address=ip, status='requested')
+            # Send email
+            from django.core.mail import send_mail
+            subject = 'Password Reset Request'
+            message = f"You requested a password reset. Click the link below to reset your password:\n{reset_url}\n\nIf you did not request this, please ignore this email."
+            send_mail(subject, message, None, [email], fail_silently=False)
+            messages.success(request, f"If an account exists, a reset link will be sent to your email.")
             return redirect('password_reset_done')
         except User.DoesNotExist:
-            messages.error(request, "No account found with this email address")
+            PasswordResetLog.objects.create(user=None, email=email, ip_address=ip, status='failed', reason='No account found')
+            messages.error(request, "If an account exists, a reset link will be sent to your email.")
     
     return render(request, 'password_reset.html')
 
@@ -3111,8 +3712,11 @@ def password_reset_confirm_view(request, uidb64, token):
         uid = urlsafe_base64_decode(uidb64).decode()
         user = User.objects.get(pk=uid)
         
+        from .models import PasswordResetLog
+        ip = request.META.get('REMOTE_ADDR')
         if not default_token_generator.check_token(user, token):
-            messages.error(request, "Password reset link has expired")
+            PasswordResetLog.objects.create(user=user, email=user.email, ip_address=ip, status='failed', reason='Token expired/invalid')
+            messages.error(request, "Password reset link has expired or is invalid")
             return redirect('login')
         
         if request.method == 'POST':
@@ -3130,9 +3734,21 @@ def password_reset_confirm_view(request, uidb64, token):
             if len(password1) < 8:
                 messages.error(request, "Password must be at least 8 characters")
                 return render(request, 'password_reset_confirm.html')
+
+                import re
+                if not re.search(r'[A-Z]', password1):
+                    messages.error(request, "Password must contain at least one uppercase letter")
+                    return render(request, 'password_reset_confirm.html')
+                if not re.search(r'[0-9]', password1):
+                    messages.error(request, "Password must contain at least one number")
+                    return render(request, 'password_reset_confirm.html')
+                if not re.search(r'[^A-Za-z0-9]', password1):
+                    messages.error(request, "Password must contain at least one special character")
+                    return render(request, 'password_reset_confirm.html')
             
             user.set_password(password1)
             user.save()
+            PasswordResetLog.objects.create(user=user, email=user.email, ip_address=ip, status='success', reason='Password reset')
             messages.success(request, "Password reset successfully!")
             return redirect('password_reset_complete')
         
@@ -4100,6 +4716,19 @@ def admin_adjust_rating(request, product_id):
 def admin_approve_review(request, review_id):
     """Admin Approve Review"""
     from django.http import JsonResponse
+    from django.db.models import Avg
+
+    def refresh_product_rating(product):
+        """Recalculate product rating and review count from approved reviews"""
+        approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+        if approved_reviews.exists():
+            product.review_count = approved_reviews.count()
+            avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+            product.rating = round(avg_rating, 1) if avg_rating else 0
+        else:
+            product.review_count = 0
+            product.rating = 0
+        product.save(update_fields=['review_count', 'rating'])
     
     review = get_object_or_404(ProductReview, id=review_id)
     
@@ -4122,18 +4751,7 @@ def admin_approve_review(request, review_id):
             review.is_approved = True
             review.save()
             
-            # Update product review count and rating
-            product = review.product
-            product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
-            
-            # Recalculate average rating
-            approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
-            if approved_reviews.exists():
-                from django.db.models import Avg
-                avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
-                product.rating = round(avg_rating, 1)
-            
-            product.save()
+            refresh_product_rating(review.product)
             
             return JsonResponse({
                 'success': True,
@@ -4149,10 +4767,7 @@ def admin_approve_review(request, review_id):
     review.is_approved = True
     review.save()
     
-    # Update product review count
-    product = review.product
-    product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
-    product.save()
+    refresh_product_rating(review.product)
     
     messages.success(request, 'Review approved successfully!')
     return redirect('admin_reviews')
@@ -4166,9 +4781,16 @@ def admin_delete_review(request, review_id):
     product = review.product
     review.delete()
     
-    # Update product review count
-    product.review_count = ProductReview.objects.filter(product=product, is_approved=True).count()
-    product.save()
+    from django.db.models import Avg
+    approved_reviews = ProductReview.objects.filter(product=product, is_approved=True)
+    if approved_reviews.exists():
+        product.review_count = approved_reviews.count()
+        avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg']
+        product.rating = round(avg_rating, 1) if avg_rating else 0
+    else:
+        product.review_count = 0
+        product.rating = 0
+    product.save(update_fields=['review_count', 'rating'])
     
     messages.success(request, 'Review deleted successfully!')
     return redirect('admin_reviews')

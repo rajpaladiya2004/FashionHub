@@ -220,14 +220,14 @@
                             <div class="pd-rating mb-10">
                                 <ul class="rating">
                                     {% for i in "12345" %}
-                                        {% if i|add:"0" <= product.rating %}
+                                        {% if i|add:"0" <= avg_rating %}
                                             <li><a href="#"><i class="fas fa-star"></i></a></li>
                                         {% else %}
                                             <li><a href="#"><i class="fal fa-star"></i></a></li>
                                         {% endif %}
                                     {% endfor %}
                                 </ul>
-                                <span>({{ product.review_count }} review{% if product.review_count != 1 %}s{% endif %})</span>
+                                <span>({{ total_reviews }} review{% if total_reviews != 1 %}s{% endif %})</span>
                                 <span><a href="#">Add your review</a></span>
                             </div>
                             <div class="price mb-10">
@@ -243,9 +243,6 @@
                                     <li><a href="#"><i class="fas fa-circle"></i> Easy Returns & Exchanges</a></li>
                                     <li><a href="#"><i class="fas fa-circle"></i> 100% Authentic Guarantee</a></li>
                                 </ul>
-                            </div>
-                            <div class="product-stock mb-20">
-                                <h5>Availability: <span> {{ product.stock }} in stock</span></h5>
                             </div>
                             <div class="cart-option mb-15">
                                 <form method="POST" action="{% url 'add_to_cart' %}" class="pd-cta-wrap">
@@ -272,10 +269,6 @@
                                     <button type="button" class="action-chip wishlist-chip {% if in_wishlist %}wishlisted{% endif %}" data-product-id="{{ product.id }}" data-logged-in="{% if user.is_authenticated %}1{% else %}0{% endif %}" onclick="handlePdWishlistClick(this);">
                                         <span class="icon"><i class="{% if in_wishlist %}fas{% else %}fal{% endif %} fa-heart"></i></span>
                                         <span>{% if in_wishlist %}In wishlist{% else %}Add to wishlist{% endif %}</span>
-                                    </button>
-                                    <button type="button" class="action-chip" onclick="compareProduct({{ product.id }});">
-                                        <span class="icon"><i class="fal fa-layer-group"></i></span>
-                                        <span>Compare</span>
                                     </button>
                                     <button type="button" class="action-chip" onclick="shareProduct();">
                                         <span class="icon"><i class="fal fa-share-alt"></i></span>

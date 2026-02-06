@@ -73,6 +73,17 @@
     position: relative;
     z-index: 1;
     margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Shop page action buttons: force perfect circle */
+.action-btn.cart-btn {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
 }
 
 .product__item:hover {
@@ -90,6 +101,19 @@
 .product__content {
     background: transparent;
     padding: 0 10px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Match Top Featured small card size for Top Deals / Top Selling / Recommended */
+@media (min-width: 576px) {
+    .top-deals-section .col-xl-2-5,
+    .top-selling-section .col-xl-2-5,
+    .recommended-section .col-xl-2-5 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
 }
 
 /* Product content spacing */
@@ -104,6 +128,7 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    min-height: 20px;
 }
 
 .product__content .rating ul {
@@ -123,6 +148,7 @@
     margin-bottom: 0 !important;
     font-size: 16px;
     font-weight: 600;
+    min-height: 24px;
 }
 
 .product__content .price del {
@@ -148,6 +174,18 @@
 .product__add-cart {
     margin-top: 16px !important;
     padding: 0 10px;
+    margin-top: auto !important;
+}
+
+/* Shop card body alignment */
+.product-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.product-body .mt-3:last-child {
+    margin-top: auto !important;
 }
 
 

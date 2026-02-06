@@ -1,5 +1,6 @@
 ﻿{% extends "base.html" %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Shop - VibeMall{% endblock %}
 
@@ -225,7 +226,7 @@
 
                 <div class="row g-3">
                     {% for product in products %}
-                        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
+                        <div class="col-xl-4 col-lg-4 col-md-6 col-sm-6">
                             <div class="product-card h-100">
                                 <div class="card-media" style="position: relative;">
                                     {% if product.discount_percent %}
@@ -246,8 +247,8 @@
                                             data-product-price="{{ product.price }}"
                                             data-product-old-price="{{ product.old_price|default_if_none:'' }}"
                                             data-product-image="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
-                                            data-product-rating="{{ product.rating }}"
-                                            data-product-reviews="{{ product.review_count }}"
+                                            data-product-rating="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.avg_rating }}{% else %}{{ product.rating }}{% endif %}{% endwith %}"
+                                            data-product-reviews="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %}{% endwith %}"
                                             data-product-link="{% url 'product-details' product.id %}"
                                             data-product-stock="{{ product.stock }}"
                                             onclick="openQuickView(this)">
@@ -284,16 +285,26 @@
                                     </div>
 
                                     <div class="rating-inline d-flex align-items-center gap-2 mt-1">
+                                        {% with stats=product_stats|get_item:product.id %}
                                         <span>
                                             {% for i in "12345" %}
-                                                {% if forloop.counter <= product.rating %}
-                                                    <i class="fas fa-star"></i>
+                                                {% if stats %}
+                                                    {% if forloop.counter <= stats.avg_rating|add:0 %}
+                                                        <i class="fas fa-star"></i>
+                                                    {% else %}
+                                                        <i class="fal fa-star"></i>
+                                                    {% endif %}
                                                 {% else %}
-                                                    <i class="fal fa-star"></i>
+                                                    {% if forloop.counter <= product.rating %}
+                                                        <i class="fas fa-star"></i>
+                                                    {% else %}
+                                                        <i class="fal fa-star"></i>
+                                                    {% endif %}
                                                 {% endif %}
                                             {% endfor %}
                                         </span>
-                                        <span class="text-muted small">({{ product.review_count }} reviews)</span>
+                                        <span class="text-muted small" style="white-space: nowrap;">({% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %} reviews)</span>
+                                        {% endwith %}
                                     </div>
 
                                     <div class="mt-3">

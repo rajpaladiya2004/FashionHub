@@ -75,7 +75,11 @@
                     <div class="block-userlink">
                             {% if user.is_authenticated %}
                                 <a class="icon-link" href="{% url 'profile' %}" style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="flaticon-user"></i>
+                                    {% if user.userprofile.profile_image and 'default.png' not in user.userprofile.profile_image.url %}
+                                        <img src="{{ user.userprofile.profile_image.url }}" alt="{{ user.username }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                                    {% else %}
+                                        <i class="flaticon-user"></i>
+                                    {% endif %}
                                     <span class="text">
                                         <span class="sub">{{ user.username }}</span>
                                         My Account

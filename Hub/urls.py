@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     # Admin Panel URLs
     path('admin-panel/', views.admin_dashboard, name='admin_dashboard'),
+    path('admin/new-dashboard/', views.admin_new_dashboard, name='admin_new_dashboard'),
     path('admin-panel/test/', views.admin_test, name='admin_test'),
     path('admin-panel/add-product/', views.admin_add_product, name='admin_add_product'),
     path('admin-panel/products/', views.admin_product_list, name='admin_product_list'),
@@ -13,6 +14,7 @@ urlpatterns = [
     path('admin-panel/categories/add/', views.admin_add_category, name='admin_add_category'),
     path('admin-panel/categories/edit/<int:category_id>/', views.admin_edit_category, name='admin_edit_category'),
     path('admin-panel/categories/delete/<int:category_id>/', views.admin_delete_category, name='admin_delete_category'),
+    path('admin-panel/main-page-products/', views.admin_main_page_products, name='admin_main_page_products'),
     path('admin-panel/brand-partners/', views.admin_brand_partners, name='admin_brand_partners'),
     path('admin-panel/brand-partners/add/', views.admin_add_brand_partner, name='admin_add_brand_partner'),
     path('admin-panel/brand-partners/edit/<int:partner_id>/', views.admin_edit_brand_partner, name='admin_edit_brand_partner'),
@@ -23,6 +25,8 @@ urlpatterns = [
     path('admin-panel/orders/<int:order_id>/', views.admin_order_details, name='admin_order_details'),
     path('admin-panel/orders/<int:order_id>/approve/', views.admin_approve_order, name='admin_approve_order'),
     path('admin-panel/orders/<int:order_id>/reject/', views.admin_reject_order, name='admin_reject_order'),
+    path('admin-panel/chat/', views.admin_chat_list, name='admin_chat_list'),
+    path('admin-panel/chat/<int:thread_id>/', views.admin_chat_detail, name='admin_chat_detail'),
     path('admin-panel/invoices/', views.admin_invoices, name='admin_invoices'),
     path('admin-panel/invoice-inventory/', views.admin_invoice_inventory, name='admin_invoice_inventory'),
     path('admin-panel/inventory/update-stock/', views.admin_update_inventory, name='admin_update_inventory'),
@@ -52,6 +56,10 @@ urlpatterns = [
     # Profile
     path('profile/', views.profile_view, name='profile'),
     path('api/profile/stats/', views.api_profile_stats, name='api_profile_stats'),
+
+    # Support Chat
+    path('chat/thread/', views.chat_thread, name='chat_thread'),
+    path('chat/message/', views.chat_message, name='chat_message'),
     
     # Cart URLs
     path('add-to-cart/', views.add_to_cart, name='add_to_cart'),

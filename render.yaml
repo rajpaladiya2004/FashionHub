@@ -1,6 +1,7 @@
 services:
   - type: web
     name: fashionhub
+    rootDir: FashionHub
     runtime: python
     buildCommand: "./build.sh"
     startCommand: "gunicorn FashioHub.wsgi:application"

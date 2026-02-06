@@ -2,6 +2,7 @@
 
 {% load static %}
 {% load hub_filters %}
+{% load custom_filters %}
 
 {% block title %}Home - VibeMall{% endblock %}
 
@@ -183,7 +184,7 @@
 
 
 
-<section class="topsell__area-1 pt-15">
+<section class="topsell__area-1 pt-15 top-deals-section">
     <div class="container">
 
         <!-- Header -->
@@ -230,8 +231,8 @@
 
         <!-- Products Grid -->
         <div class="row">
-            {% for product in top_deals|slice:":5" %}
-            <div class="col-xl-2-5 col-lg-3 col-md-4 col-sm-6">
+            {% for product in top_deals|slice:":4" %}
+            <div class="col-xl-3 col-lg-3 col-md-4 col-sm-6">
     <div class="product__item mb-20">
                     <!-- PRODUCT THUMB -->
                     <div class="product__thumb fix" style="position: relative; overflow: visible !important;">
@@ -264,8 +265,8 @@
                                         data-product-price="{{ product.price }}"
                                         data-product-old-price="{{ product.old_price|default_if_none:'' }}"
                                         data-product-image="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
-                                        data-product-rating="{{ product.rating }}"
-                                        data-product-reviews="{{ product.review_count }}"
+                                        data-product-rating="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.avg_rating }}{% else %}{{ product.rating }}{% endif %}{% endwith %}"
+                                        data-product-reviews="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %}{% endwith %}"
                                         data-product-link="{% url 'product-details' product.id %}"
                                         data-product-stock="{{ product.stock }}"
                                         onclick="openQuickView(this)">
@@ -299,20 +300,38 @@
 
                         <!-- ⭐ DYNAMIC RATING & REVIEWS -->
                         <div class="rating mb-5">
+                            {% with stats=product_stats|get_item:product.id %}
                             <ul>
                                 {% for i in "12345" %}
-                                    {% if forloop.counter <= product.rating|add:0 %}
-                                        <li><i class="fas fa-star star-active"></i></li>
+                                    {% if stats %}
+                                        {% if forloop.counter <= stats.avg_rating|add:0 %}
+                                            <li><i class="fas fa-star star-active"></i></li>
+                                        {% else %}
+                                            <li><i class="far fa-star star-inactive"></i></li>
+                                        {% endif %}
                                     {% else %}
-                                        <li><i class="far fa-star star-inactive"></i></li>
+                                        {% if forloop.counter <= product.rating|add:0 %}
+                                            <li><i class="fas fa-star star-active"></i></li>
+                                        {% else %}
+                                            <li><i class="far fa-star star-inactive"></i></li>
+                                        {% endif %}
                                     {% endif %}
                                 {% endfor %}
                             </ul>
-                            {% if product.review_count > 0 %}
-                                <span>({{ product.review_count }} review{{ product.review_count|pluralize }})</span>
+                            {% if stats %}
+                                {% if stats.review_count > 0 %}
+                                    <span style="white-space: nowrap;">({{ stats.review_count }} review{{ stats.review_count|pluralize }})</span>
+                                {% else %}
+                                    <span style="white-space: nowrap;">(No reviews yet)</span>
+                                {% endif %}
                             {% else %}
-                                <span>(No reviews yet)</span>
+                                {% if product.review_count > 0 %}
+                                    <span style="white-space: nowrap;">({{ product.review_count }} review{{ product.review_count|pluralize }})</span>
+                                {% else %}
+                                    <span style="white-space: nowrap;">(No reviews yet)</span>
+                                {% endif %}
                             {% endif %}
+                            {% endwith %}
                         </div>
 
 
@@ -350,7 +369,7 @@
 </section>
 
 <!-- TOP SELLING PRODUCTS SECTION -->
-<section class="topsell__area-1 pt-15">
+<section class="topsell__area-1 pt-15 top-selling-section">
     <div class="container">
         <div class="row">
             <div class="col-xl-12">
@@ -367,8 +386,8 @@
 
         <!-- Products Grid -->
         <div class="row">
-            {% for product in top_selling|slice:":5" %}
-            <div class="col-xl-2-5 col-lg-3 col-md-4 col-sm-6">
+            {% for product in top_selling|slice:":4" %}
+            <div class="col-xl-3 col-lg-3 col-md-4 col-sm-6">
                 <div class="product__item mb-20">
                     <div class="product__thumb fix" style="position: relative; overflow: visible !important;">
                                 <div class="product-image w-img" style="overflow: hidden;">
@@ -394,8 +413,8 @@
                                         data-product-price="{{ product.price }}"
                                         data-product-old-price="{{ product.old_price|default_if_none:'' }}"
                                         data-product-image="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
-                                        data-product-rating="{{ product.rating }}"
-                                        data-product-reviews="{{ product.review_count }}"
+                                        data-product-rating="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.avg_rating }}{% else %}{{ product.rating }}{% endif %}{% endwith %}"
+                                        data-product-reviews="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %}{% endwith %}"
                                         data-product-link="{% url 'product-details' product.id %}"
                                         data-product-stock="{{ product.stock }}"
                                         onclick="openQuickView(this)">
@@ -421,16 +440,26 @@
 <h6><a href="{% url 'product-details' product.id %}">{{ product.name }}</a></h6>
 
                                 <div class="rating mb-5">
+                                    {% with stats=product_stats|get_item:product.id %}
                                     <ul>
                                         {% for i in "12345" %}
-                                            {% if forloop.counter <= product.rating|add:0 %}
-                                                <li><i class="fas fa-star star-active"></i></li>
+                                            {% if stats %}
+                                                {% if forloop.counter <= stats.avg_rating|add:0 %}
+                                                    <li><i class="fas fa-star star-active"></i></li>
+                                                {% else %}
+                                                    <li><i class="far fa-star star-inactive"></i></li>
+                                                {% endif %}
                                             {% else %}
-                                                <li><i class="far fa-star star-inactive"></i></li>
+                                                {% if forloop.counter <= product.rating|add:0 %}
+                                                    <li><i class="fas fa-star star-active"></i></li>
+                                                {% else %}
+                                                    <li><i class="far fa-star star-inactive"></i></li>
+                                                {% endif %}
                                             {% endif %}
                                         {% endfor %}
                                     </ul>
-                                    <span>({{ product.review_count }} review{{ product.review_count|pluralize }})</span>
+                                    <span style="white-space: nowrap;">({% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %} review{% if stats %}{% if stats.review_count != 1 %}s{% endif %}{% else %}{{ product.review_count|pluralize }}{% endif %})</span>
+                                    {% endwith %}
                                 </div>
 
                                 <div class="price mb-0">
@@ -502,7 +531,7 @@
         </section>
 
 <!-- TOP FEATURED PRODUCTS SECTION -->
-<section class="topsell__area-1 pt-15">
+<section class="topsell__area-1 pt-15 recommended-section">
     <div class="container">
         <div class="row">
             <div class="col-xl-12">
@@ -547,8 +576,8 @@
                                     data-product-price="{{ product.price }}"
                                     data-product-old-price="{{ product.old_price|default_if_none:'' }}"
                                     data-product-image="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
-                                    data-product-rating="{{ product.rating }}"
-                                    data-product-reviews="{{ product.review_count }}"
+                                    data-product-rating="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.avg_rating }}{% else %}{{ product.rating }}{% endif %}{% endwith %}"
+                                    data-product-reviews="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %}{% endwith %}"
                                     data-product-link="{% url 'product-details' product.id %}"
                                     data-product-stock="{{ product.stock }}"
                                     onclick="openQuickView(this)">
@@ -573,16 +602,26 @@
                             <h6><a href="{% url 'product-details' product.id %}">{{ product.name }}</a></h6>
                             
                             <div class="rating">
+                                {% with stats=product_stats|get_item:product.id %}
                                 <ul>
                                     {% for i in "12345" %}
-                                        {% if forloop.counter <= product.rating|add:0 %}
-                                            <li><i class="fas fa-star"></i></li>
+                                        {% if stats %}
+                                            {% if forloop.counter <= stats.avg_rating|add:0 %}
+                                                <li><i class="fas fa-star"></i></li>
+                                            {% else %}
+                                                <li><i class="far fa-star"></i></li>
+                                            {% endif %}
                                         {% else %}
-                                            <li><i class="far fa-star"></i></li>
+                                            {% if forloop.counter <= product.rating|add:0 %}
+                                                <li><i class="fas fa-star"></i></li>
+                                            {% else %}
+                                                <li><i class="far fa-star"></i></li>
+                                            {% endif %}
                                         {% endif %}
                                     {% endfor %}
                                 </ul>
-                                <span>({{ product.review_count|default:0 }} review{{ product.review_count|pluralize }})</span>
+                                <span style="white-space: nowrap;">({% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count|default:0 }}{% endif %} review{% if stats %}{% if stats.review_count != 1 %}s{% endif %}{% else %}{{ product.review_count|pluralize }}{% endif %})</span>
+                                {% endwith %}
                             </div>
 
                             <div class="price">
@@ -650,8 +689,8 @@
                                         data-product-price="{{ product.price }}"
                                         data-product-old-price="{{ product.old_price|default_if_none:'' }}"
                                         data-product-image="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
-                                        data-product-rating="{{ product.rating }}"
-                                        data-product-reviews="{{ product.review_count }}"
+                                        data-product-rating="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.avg_rating }}{% else %}{{ product.rating }}{% endif %}{% endwith %}"
+                                        data-product-reviews="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %}{% endwith %}"
                                         data-product-link="{% url 'product-details' product.id %}"
                                         data-product-stock="{{ product.stock }}"
                                         onclick="openQuickView(this)">
@@ -676,16 +715,26 @@
 <h6><a href="{% url 'product-details' product.id %}">{{ product.name|truncatewords:4 }}</a></h6>
                                 
                                 <div class="rating mb-5">
+                                    {% with stats=product_stats|get_item:product.id %}
                                     <ul>
                                         {% for i in "12345" %}
-                                            {% if forloop.counter <= product.rating|add:0 %}
-                                                <li><i class="fas fa-star star-active"></i></li>
+                                            {% if stats %}
+                                                {% if forloop.counter <= stats.avg_rating|add:0 %}
+                                                    <li><i class="fas fa-star star-active"></i></li>
+                                                {% else %}
+                                                    <li><i class="far fa-star star-inactive"></i></li>
+                                                {% endif %}
                                             {% else %}
-                                                <li><i class="far fa-star star-inactive"></i></li>
+                                                {% if forloop.counter <= product.rating|add:0 %}
+                                                    <li><i class="fas fa-star star-active"></i></li>
+                                                {% else %}
+                                                    <li><i class="far fa-star star-inactive"></i></li>
+                                                {% endif %}
                                             {% endif %}
                                         {% endfor %}
                                     </ul>
-                                    <span>({{ product.review_count|default:0 }} review{{ product.review_count|pluralize }})</span>
+                                    <span style="white-space: nowrap;">({% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count|default:0 }}{% endif %} review{% if stats %}{% if stats.review_count != 1 %}s{% endif %}{% else %}{{ product.review_count|pluralize }}{% endif %})</span>
+                                    {% endwith %}
                                 </div>
 
                                 <div class="price mb-0">
@@ -735,8 +784,8 @@
 
         <!-- Products Grid -->
         <div class="row">
-            {% for product in recommended|slice:":5" %}
-            <div class="col-xl-2-5 col-lg-3 col-md-4 col-sm-6">
+            {% for product in recommended|slice:":4" %}
+            <div class="col-xl-3 col-lg-3 col-md-4 col-sm-6">
                 <div class="product__item mb-20">
                     <div class="product__thumb fix" style="position: relative; overflow: visible !important;">
                         <div class="product-image w-img" style="overflow: hidden;">
@@ -763,8 +812,8 @@
                                         data-product-price="{{ product.price }}"
                                         data-product-old-price="{{ product.old_price|default_if_none:'' }}"
                                         data-product-image="{% if product.image %}{{ product.image.url }}{% else %}{% static 'assets/img/product/tp-1.jpg' %}{% endif %}"
-                                        data-product-rating="{{ product.rating }}"
-                                        data-product-reviews="{{ product.review_count }}"
+                                        data-product-rating="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.avg_rating }}{% else %}{{ product.rating }}{% endif %}{% endwith %}"
+                                        data-product-reviews="{% with stats=product_stats|get_item:product.id %}{% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %}{% endwith %}"
                                         data-product-link="{% url 'product-details' product.id %}"
                                         data-product-stock="{{ product.stock }}"
                                         onclick="openQuickView(this)">
@@ -790,16 +839,26 @@
 <h6><a href="{% url 'product-details' product.id %}">{{ product.name }}</a></h6>
 
                                 <div class="rating mb-5">
+                                    {% with stats=product_stats|get_item:product.id %}
                                     <ul>
                                         {% for i in "12345" %}
-                                            {% if forloop.counter <= product.rating|add:0 %}
-                                                <li><i class="fas fa-star star-active"></i></li>
+                                            {% if stats %}
+                                                {% if forloop.counter <= stats.avg_rating|add:0 %}
+                                                    <li><i class="fas fa-star star-active"></i></li>
+                                                {% else %}
+                                                    <li><i class="far fa-star star-inactive"></i></li>
+                                                {% endif %}
                                             {% else %}
-                                                <li><i class="far fa-star star-inactive"></i></li>
+                                                {% if forloop.counter <= product.rating|add:0 %}
+                                                    <li><i class="fas fa-star star-active"></i></li>
+                                                {% else %}
+                                                    <li><i class="far fa-star star-inactive"></i></li>
+                                                {% endif %}
                                             {% endif %}
                                         {% endfor %}
                                     </ul>
-                                    <span>({{ product.review_count }} review{{ product.review_count|pluralize }})</span>
+                                    <span style="white-space: nowrap;">({% if stats %}{{ stats.review_count }}{% else %}{{ product.review_count }}{% endif %} review{% if stats %}{% if stats.review_count != 1 %}s{% endif %}{% else %}{{ product.review_count|pluralize }}{% endif %})</span>
+                                    {% endwith %}
                                 </div>
 
                                 <div class="price mb-0">
