@@ -1,5 +1,9 @@
 # FashioHub - Django E-Commerce Platform
 
+[![CI - Test and Lint](https://github.com/rajpaladiya2004/FashionHub/actions/workflows/ci.yml/badge.svg)](https://github.com/rajpaladiya2004/FashionHub/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/rajpaladiya2004/FashionHub/actions/workflows/codeql.yml/badge.svg)](https://github.com/rajpaladiya2004/FashionHub/actions/workflows/codeql.yml)
+[![Security Scan](https://github.com/rajpaladiya2004/FashionHub/actions/workflows/security.yml/badge.svg)](https://github.com/rajpaladiya2004/FashionHub/actions/workflows/security.yml)
+
 A modern e-commerce web application built with Django 5.2, featuring product management, shopping cart, wishlist, user authentication, and product reviews with admin approval.
 
 ## Features
@@ -21,6 +25,15 @@ A modern e-commerce web application built with Django 5.2, featuring product man
 - Bootstrap 5
 - FontAwesome Icons
 - JavaScript (Vanilla)
+
+## Documentation
+
+- [Installation & Setup](#installation)
+- [Contributing Guide](CONTRIBUTING.md)
+- [GitHub Actions Setup](GITHUB_ACTIONS_GUIDE.md)
+- [Render Deployment](RENDER_DEPLOYMENT_GUIDE.md)
+- [Razorpay Setup](RAZORPAY_SETUP_GUIDE.md)
+- [Category Management](CATEGORY_MANAGEMENT_GUIDE.md)
 
 ## Installation
 
@@ -98,6 +111,27 @@ FashioHub/
 - Approve/reject user reviews
 - Monitor sales and user activity
 - Configure site content (sliders, banners, features)
+
+## CI/CD & Automation
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+- **CI Pipeline**: Automated testing and linting on every push and PR
+- **CodeQL Analysis**: Security vulnerability scanning and code quality checks
+- **Security Scanning**: Regular dependency and security audits
+- **Auto Deployment**: Automatic deployment to Render on main branch updates
+- **Issue Management**: Automated greeting and labeling for new issues
+- **Stale Management**: Automatic cleanup of inactive issues and PRs
+
+### Workflows
+
+- `ci.yml` - Runs tests, linting, and Django checks
+- `codeql.yml` - Security and code quality analysis
+- `security.yml` - Dependency vulnerability scanning
+- `deploy.yml` - Automated deployment to Render
+- `handle-new-issue.yml` - Greets new issue creators
+- `pr-labels.yml` - Auto-labels PRs by size and greets first-time contributors
+- `stale.yml` - Manages stale issues and PRs
 
 ## License
 
