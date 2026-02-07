@@ -41,6 +41,61 @@
         <!-- cart-area-start -->
         <section class="cart-area pt-120 pb-120">
             <div class="container">
+                <style>
+                    .cart-qty-wrap {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 10px;
+                        flex-wrap: wrap;
+                    }
+                    .cart-qty {
+                        display: inline-flex;
+                        align-items: center;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 10px;
+                        padding: 4px;
+                        background: #fff;
+                    }
+                    .cart-qty-btn {
+                        width: 34px;
+                        height: 34px;
+                        border: none;
+                        background: #f8fafc;
+                        color: #0f172a;
+                        border-radius: 8px;
+                        font-weight: 700;
+                        line-height: 1;
+                        cursor: pointer;
+                    }
+                    .cart-qty-input {
+                        width: 52px;
+                        text-align: center;
+                        border: none;
+                        outline: none;
+                        font-weight: 600;
+                        background: transparent;
+                        -moz-appearance: textfield;
+                    }
+                    .cart-qty-input::-webkit-outer-spin-button,
+                    .cart-qty-input::-webkit-inner-spin-button {
+                        -webkit-appearance: none;
+                        margin: 0;
+                    }
+                    .cart-qty-action {
+                        padding: 8px 12px;
+                        border-radius: 8px;
+                        font-weight: 600;
+                    }
+                    @media (max-width: 576px) {
+                        .cart-qty-btn {
+                            width: 30px;
+                            height: 30px;
+                        }
+                        .cart-qty-input {
+                            width: 44px;
+                        }
+                    }
+                </style>
                 <!-- Messages -->
                 {% if messages %}
                     {% for message in messages %}
@@ -83,10 +138,14 @@
                                        <td class="product-quantity">
                                              <form method="POST" action="{% url 'update_cart_quantity' item.id %}" style="display: inline;">
                                                 {% csrf_token %}
-                                                <div class="d-flex align-items-center gap-2">
-                                                   <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="999" style="width: 60px;">
-                                                   <button type="submit" class="btn btn-sm btn-primary">Update</button>
-                                                </div>
+                                                                <div class="cart-qty-wrap" data-max="999">
+                                                                    <div class="cart-qty">
+                                                                         <button type="button" class="cart-qty-btn" data-step="-1" aria-label="Decrease quantity">-</button>
+                                                                         <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="999" class="cart-qty-input" inputmode="numeric">
+                                                                         <button type="button" class="cart-qty-btn" data-step="1" aria-label="Increase quantity">+</button>
+                                                                    </div>
+                                                                    <button type="submit" class="btn btn-sm btn-primary cart-qty-action">Update</button>
+                                                                </div>
                                              </form>
                                        </td>
                                        <td class="product-subtotal"><span class="amount">&#8377;{{ item.get_total_price }}</span></td>
@@ -139,6 +198,31 @@
             </div>
          </section>
          <!-- cart-area-end -->
+
+        <script>
+            document.querySelectorAll('.cart-qty-wrap').forEach((wrap) => {
+                const input = wrap.querySelector('.cart-qty-input');
+                const buttons = wrap.querySelectorAll('.cart-qty-btn');
+                if (!input) return;
+                const max = parseInt(input.getAttribute('max') || wrap.getAttribute('data-max') || '999', 10);
+                const min = parseInt(input.getAttribute('min') || '1', 10);
+
+                const clamp = (value) => Math.min(max, Math.max(min, value));
+
+                buttons.forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const step = parseInt(btn.getAttribute('data-step') || '0', 10);
+                        const current = parseInt(input.value || min, 10);
+                        input.value = clamp(current + step);
+                    });
+                });
+
+                input.addEventListener('input', () => {
+                    const current = parseInt(input.value || min, 10);
+                    input.value = clamp(current);
+                });
+            });
+        </script>
 
         <!-- cta-area-start -->
         <section class="cta-area d-ldark-bg pt-55 pb-10">

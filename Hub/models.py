@@ -319,6 +319,7 @@ class UserProfile(models.Model):
     is_blocked = models.BooleanField(default=False, help_text="Block user from accessing the site")
     customer_segment = models.CharField(max_length=15, choices=CUSTOMER_SEGMENT_CHOICES, default='NEW')
     total_spent = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     last_activity = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -769,6 +770,150 @@ class OrderStatusHistory(models.Model):
         return f"Order #{self.order.order_number} - {self.old_status} → {self.new_status}"
 
 
+class ReturnRequest(models.Model):
+    """Customer return requests for delivered orders"""
+    STATUS_CHOICES = [
+        ('REQUESTED', 'Requested'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('PICKUP_SCHEDULED', 'Pickup Scheduled'),
+        ('RECEIVED', 'Received'),
+        ('QC_PASSED', 'QC Passed'),
+        ('QC_FAILED', 'QC Failed'),
+        ('REFUNDED', 'Refunded'),
+        ('REPLACED', 'Replaced'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    RETURN_REASON_CHOICES = [
+        ('DEFECTIVE', 'Defective / Damaged'),
+        ('WRONG_ITEM', 'Wrong Item Delivered'),
+        ('NOT_AS_DESCRIBED', 'Not as described'),
+        ('SIZE_FIT', 'Size / Fit Issue'),
+        ('CHANGED_MIND', 'Changed Mind'),
+        ('OTHER', 'Other'),
+    ]
+
+    return_number = models.CharField(max_length=20, unique=True, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='return_requests')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='return_requests')
+    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name='return_requests', null=True, blank=True)
+
+    reason = models.CharField(max_length=30, choices=RETURN_REASON_CHOICES, default='OTHER')
+    reason_notes = models.TextField(blank=True)
+    description = models.TextField(blank=True, help_text="Detailed description of the issue")
+    images = models.ImageField(upload_to='returns/', blank=True, null=True, help_text="Upload product images")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='REQUESTED')
+
+    requested_at = models.DateTimeField(default=timezone.now)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    pickup_scheduled_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    qc_checked_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    refund_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    refund_amount_net = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    refund_method = models.CharField(max_length=50, blank=True)
+    bank_account_name = models.CharField(max_length=100, blank=True)
+    bank_account_number = models.CharField(max_length=34, blank=True)
+    bank_ifsc = models.CharField(max_length=20, blank=True)
+    bank_name = models.CharField(max_length=100, blank=True)
+    upi_id = models.CharField(max_length=200, blank=True)
+    upi_name = models.CharField(max_length=200, blank=True)
+    admin_notes = models.TextField(blank=True)
+
+    request_ip = models.GenericIPAddressField(null=True, blank=True)
+    request_user_agent = models.CharField(max_length=255, blank=True)
+
+    pickup_date = models.DateTimeField(null=True, blank=True)
+    refund_date = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+        verbose_name = "Return Request"
+        verbose_name_plural = "Return Requests"
+
+    def __str__(self):
+        display_number = self.return_number or f"{self.id}"
+        return f"Return #{display_number} - Order #{self.order.order_number}"
+
+    def save(self, *args, **kwargs):
+        if not self.return_number:
+            date_str = timezone.now().strftime('%Y%m%d')
+            last_return = ReturnRequest.objects.filter(
+                return_number__startswith=f'RET-{date_str}'
+            ).order_by('-return_number').first()
+
+            if last_return:
+                last_num = int(last_return.return_number.split('-')[-1])
+                new_num = str(last_num + 1).zfill(5)
+            else:
+                new_num = '00001'
+
+            self.return_number = f'RET-{date_str}-{new_num}'
+
+        super().save(*args, **kwargs)
+
+
+class ReturnItem(models.Model):
+    """Line items for a return request"""
+    CONDITION_CHOICES = [
+        ('NEW', 'New / Unused'),
+        ('OPENED', 'Opened / Tried'),
+        ('DAMAGED', 'Damaged'),
+    ]
+
+    return_request = models.ForeignKey(ReturnRequest, on_delete=models.CASCADE, related_name='items')
+    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name='return_items')
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    condition = models.CharField(max_length=20, choices=CONDITION_CHOICES, default='OPENED')
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"ReturnItem {self.order_item.product_name} x {self.quantity}"
+
+
+class ReturnHistory(models.Model):
+    """Track return request status changes"""
+    return_request = models.ForeignKey(ReturnRequest, on_delete=models.CASCADE, related_name='history')
+    old_status = models.CharField(max_length=20, blank=True)
+    new_status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = "Return Histories"
+
+    def __str__(self):
+        return f"Return #{self.return_request.id} - {self.old_status} → {self.new_status}"
+
+
+class ReturnAttachment(models.Model):
+    """Evidence images for returns"""
+    return_request = models.ForeignKey(ReturnRequest, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='returns/')
+    original_name = models.CharField(max_length=255, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    size_bytes = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ReturnLabel(models.Model):
+    """Optional return shipping label"""
+    return_request = models.OneToOneField(ReturnRequest, on_delete=models.CASCADE, related_name='label')
+    label_file = models.FileField(upload_to='returns/labels/', blank=True, null=True)
+    label_url = models.URLField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ChatThread(models.Model):
     """Customer support chat thread"""
     STATUS_CHOICES = [
@@ -928,77 +1073,6 @@ class PointsTransaction(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.transaction_type} {self.points} points"
-
-
-class ReturnRequest(models.Model):
-    """Product return requests"""
-    RETURN_REASONS = [
-        ('DEFECTIVE', 'Defective/Damaged Product'),
-        ('WRONG_ITEM', 'Wrong Item Received'),
-        ('NOT_AS_DESCRIBED', 'Not As Described'),
-        ('SIZE_ISSUE', 'Size/Fit Issue'),
-        ('QUALITY_ISSUE', 'Quality Issue'),
-        ('CHANGED_MIND', 'Changed Mind'),
-        ('OTHER', 'Other Reason'),
-    ]
-    
-    STATUS_CHOICES = [
-        ('PENDING', 'Pending Review'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-        ('PICKUP_SCHEDULED', 'Pickup Scheduled'),
-        ('PICKED_UP', 'Picked Up'),
-        ('REFUND_INITIATED', 'Refund Initiated'),
-        ('REFUND_COMPLETED', 'Refund Completed'),
-    ]
-    
-    return_number = models.CharField(max_length=20, unique=True, editable=False)
-    order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='return_requests')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='return_requests')
-    order_item = models.ForeignKey('OrderItem', on_delete=models.CASCADE, related_name='return_requests')
-    
-    reason = models.CharField(max_length=30, choices=RETURN_REASONS)
-    description = models.TextField(help_text="Detailed description of the issue")
-    images = models.ImageField(upload_to='returns/', blank=True, null=True, help_text="Upload product images")
-    
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    admin_notes = models.TextField(blank=True, help_text="Internal admin notes")
-    
-    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    refund_method = models.CharField(max_length=50, blank=True, help_text="Bank transfer, Original payment method, etc.")
-    
-    pickup_date = models.DateTimeField(null=True, blank=True)
-    refund_date = models.DateTimeField(null=True, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name = "Return Request"
-        verbose_name_plural = "Return Requests"
-    
-    def __str__(self):
-        return f"Return #{self.return_number} - Order #{self.order.order_number}"
-    
-    def save(self, *args, **kwargs):
-        if not self.return_number:
-            # Generate unique return number: RET-YYYYMMDD-XXXXX
-            from django.utils import timezone
-            date_str = timezone.now().strftime('%Y%m%d')
-            last_return = ReturnRequest.objects.filter(
-                return_number__startswith=f'RET-{date_str}'
-            ).order_by('-return_number').first()
-            
-            if last_return:
-                last_num = int(last_return.return_number.split('-')[-1])
-                new_num = str(last_num + 1).zfill(5)
-            else:
-                new_num = '00001'
-            
-            self.return_number = f'RET-{date_str}-{new_num}'
-        
-        super().save(*args, **kwargs)
 
 
 class WishlistPriceAlert(models.Model):

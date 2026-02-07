@@ -1222,11 +1222,14 @@
                         showSuccessNotification('✓ Product added to cart successfully!');
                         
                         // Update cart count if available
-                        if (data.cart_count) {
-                            const cartCount = document.querySelector('[data-cart-count]');
+                        if (data.cart_count !== undefined) {
+                            const cartCount = document.querySelector('.cart-count');
                             if (cartCount) {
                                 cartCount.textContent = data.cart_count;
                             }
+                        }
+                        if (typeof window.refreshMiniCart === 'function') {
+                            window.refreshMiniCart();
                         }
                     } else {
                         showErrorNotification(data.message || 'Error adding to cart');
@@ -1381,6 +1384,9 @@
                 if (cartBadge && data.cart_count !== undefined) {
                     cartBadge.textContent = data.cart_count;
                 }
+                if (typeof window.refreshMiniCart === 'function') {
+                    window.refreshMiniCart();
+                }
             } else {
                 showErrorNotification(data.message || 'Error updating cart');
             }
@@ -1392,11 +1398,14 @@
 
     // Update cart counter in header
     function updateCartCounter(increment) {
-        const cartCountElement = document.querySelector('.count');
+        const cartCountElement = document.querySelector('.cart-count');
         if (cartCountElement) {
             let currentCount = parseInt(cartCountElement.textContent) || 0;
             let newCount = Math.max(0, currentCount + increment);
             cartCountElement.textContent = newCount;
+        }
+        if (typeof window.refreshMiniCart === 'function') {
+            window.refreshMiniCart();
         }
     }
 </script>

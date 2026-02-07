@@ -1,5 +1,5 @@
 # 🎉 NEW FEATURES IMPLEMENTATION GUIDE
-## FashionHub - Complete Order Management System
+## VibeMall - Complete Order Management System
 
 ---
 
@@ -44,7 +44,7 @@ All models are now visible in Django admin at `/admin/`
     <div class="container">
         <div class="header">
             <h1>✅ Order Confirmed!</h1>
-            <p>Thank you for shopping with FashionHub</p>
+            <p>Thank you for shopping with VibeMall</p>
         </div>
         
         <div class="order-details">
@@ -80,7 +80,7 @@ All models are now visible in Django admin at `/admin/`
         </center>
         
         <p style="text-align: center; color: #777; margin-top: 30px;">
-            Questions? Contact us at support@fashionhub.com
+            Questions? Contact us at support@vibemall.com
         </p>
     </div>
 </body>
@@ -513,7 +513,7 @@ def order_success(request, order_id):
     
     context = {
         'order': order,
-        'whatsapp_share_text': f'I just ordered from FashionHub! Order #{order.order_number}',
+        'whatsapp_share_text': f'I just ordered from VibeMall! Order #{order.order_number}',
         'email_subject': f'Check out my order - #{order.order_number}'
     }
     

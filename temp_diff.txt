@@ -3,7 +3,7 @@ index 7035801..40dd5c7 100644
 --- a/Hub/templates/index.html
 +++ b/Hub/templates/index.html
 @@ -6,6 +6,29 @@
- {% block title %}Home-FashionHub{% endblock %}
+ {% block title %}Home-VibeMall{% endblock %}
  
  {% block content %}
 +<style>

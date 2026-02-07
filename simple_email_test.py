@@ -1,11 +1,11 @@
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'FashionHub.FashioHub.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'VibeMall.FashioHub.settings')
 
 import sys
 sys.path.insert(0, 'D:\\web\\FashioHub')
-sys.path.insert(0, 'D:\\web\\FashioHub\\FashionHub')
+sys.path.insert(0, 'D:\\web\\FashioHub\\VibeMall')
 
 django.setup()
 

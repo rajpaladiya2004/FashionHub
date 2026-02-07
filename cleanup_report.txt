@@ -125,11 +125,11 @@ __pycache__ folders to remove: 134
   - D:\web\FashioHub\.venv\Lib\site-packages\whitenoise\runserver_nostatic\management\__pycache__
   - D:\web\FashioHub\.venv\Lib\site-packages\whitenoise\runserver_nostatic\management\commands\__pycache__
   - D:\web\FashioHub\FashioHub\__pycache__
-  - D:\web\FashioHub\FashionHub\FashioHub\__pycache__
-  - D:\web\FashioHub\FashionHub\Hub\__pycache__
-  - D:\web\FashioHub\FashionHub\Hub\management\__pycache__
-  - D:\web\FashioHub\FashionHub\Hub\migrations\__pycache__
-  - D:\web\FashioHub\FashionHub\Hub\templatetags\__pycache__
+  - D:\web\FashioHub\VibeMall\FashioHub\__pycache__
+  - D:\web\FashioHub\VibeMall\Hub\__pycache__
+  - D:\web\FashioHub\VibeMall\Hub\management\__pycache__
+  - D:\web\FashioHub\VibeMall\Hub\migrations\__pycache__
+  - D:\web\FashioHub\VibeMall\Hub\templatetags\__pycache__
   - D:\web\FashioHub\Hub\__pycache__
   - D:\web\FashioHub\Hub\management\__pycache__
   - D:\web\FashioHub\Hub\management\commands\__pycache__

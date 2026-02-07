@@ -133,6 +133,11 @@
                                     <a href="{% url 'download_invoice' order.order_number %}" class="btn btn-sm btn-outline-success" title="Download Invoice">
                                         <i class="fas fa-download"></i>
                                     </a>
+                                    {% if order.order_status == 'DELIVERED' %}
+                                    <a href="{% url 'return_request' order.id %}" class="btn btn-sm btn-outline-warning" title="Request Return">
+                                        <i class="fas fa-undo"></i>
+                                    </a>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

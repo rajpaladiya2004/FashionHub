@@ -14,7 +14,7 @@ if os.path.exists(pdf_path):
         
         # Look for key text markers in the PDF stream (they may be uncompressed)
         content = f.read()
-        if b'FashionHub' in content or b'Invoice' in content.lower():
+        if b'VibeMall' in content or b'Invoice' in content.lower():
             print(f"✓ Document text found in PDF")
         print(f"✓ PDF file is valid and ready to download")
 else:

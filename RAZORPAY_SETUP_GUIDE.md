@@ -95,7 +95,7 @@ var options = {
     "key": "{{ razorpay_key }}",
     "amount": "{{ order_amount }}",
     "currency": "INR",
-    "name": "FashionHub",
+    "name": "VibeMall",
     "order_id": "{{ razorpay_order_id }}",
     "handler": function (response) {
         // Submit payment details to success URL

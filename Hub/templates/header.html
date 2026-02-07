@@ -46,10 +46,19 @@
                     </div>
                     <div class="col-xl-5 col-lg-4 d-none d-lg-block">
                         <div class="header__search">
-                            <form action="#">
-                                <div class="header__search-box">
-                                    <input class="search-input" type="text" placeholder="I'm shopping for...">
+                            <form action="{% url 'shop' %}" method="get">
+                                <div class="header__search-box search-suggest">
+                                    <input
+                                        class="search-input"
+                                        id="mainSearchInput"
+                                        name="q"
+                                        type="text"
+                                        placeholder="I'm shopping for..."
+                                        autocomplete="off"
+                                        data-search-url="{% url 'product_search_api' %}"
+                                        data-placeholder-image="{% static 'assets/img/product/tp-1.jpg' %}">
                                     <button class="button" type="submit"><i class="far fa-search"></i></button>
+                                    <div id="mainSearchResults" class="search-results"></div>
                                 </div>
                                 <div class="header__search-cat">
                                     <select>
@@ -108,67 +117,14 @@
                             <div class="block-cart action">
                                 <a class="icon-link" href="{% url 'cart' %}" style="display: flex; align-items: center; gap: 8px;">
                                 <i class="flaticon-shopping-bag"></i>
-                                <span class="count">{{ cart_count }}</span>
+                                <span class="count cart-count">{{ cart_count }}</span>
                                 <span class="text">
                                 <span class="sub">Your Cart:</span>
-                                &#8377;{{ cart_total|default:"0.00" }} </span>
+                                &#8377;<span class="cart-total">{{ cart_total|default:"0.00" }}</span> </span>
                                 </a>
                                 <div class="cart">
-                                    <div class="cart__mini">
-                                        <ul>
-                                            <li>
-                                                <div class="cart__title">
-                                                    <h4>Your Cart</h4>
-                                                    <span>({{ cart_count }} Item{% if cart_count != 1 %}s{% endif %} in Cart)</span>
-                                                </div>
-                                            </li>
-                                            {% if cart_items %}
-                                                {% for item in cart_items %}
-                                                <li>
-                                                    <div class="cart__item d-flex justify-content-between align-items-center">
-                                                        <div class="cart__inner d-flex">
-                                                            <div class="cart__thumb">
-                                                                <a href="{% url 'product-details' item.product.id %}">
-                                                                    {% if item.product.image %}
-                                                                        <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" style="max-width: 60px; height: auto;">
-                                                                    {% else %}
-                                                                        <img src="{% static 'assets/img/product/tp-1.jpg' %}" alt="{{ item.product.name }}" style="max-width: 60px; height: auto; background-color: #f0f0f0;">
-                                                                    {% endif %}
-                                                                </a>
-                                                            </div>
-                                                            <div class="cart__details">
-                                                                <h6><a href="{% url 'product-details' item.product.id %}">{{ item.product.name }} x{{ item.quantity }}</a></h6>
-                                                                <div class="cart__price">
-                                                                    <span>&#8377;{{ item.get_total_price }}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="cart__del">
-                                                            {% if item.id %}
-                                                                <a href="{% url 'remove_from_cart' item.id %}"><i class="fal fa-times"></i></a>
-                                                            {% endif %}
-                                                        </div>
-                                                    </div>
-                                                </li>
-                                                {% endfor %}
-                                            {% else %}
-                                                <li>
-                                                    <div class="cart__item">
-                                                        <p style="text-align: center; padding: 15px; color: #999;">Your cart is empty</p>
-                                                    </div>
-                                                </li>
-                                            {% endif %}
-                                            <li>
-                                                <div class="cart__sub d-flex justify-content-between align-items-center">
-                                                    <h6>Subtotal</h6>
-                                                    <span class="cart__sub-total">&#8377;{{ cart_total|default:"0.00" }}</span>
-                                                </div>
-                                            </li>
-                                            <li>
-                                        <a href="{% url 'cart' %}" class="wc-cart mb-10">View cart</a>
-                                                <a href="{% url 'checkout' %}" class="wc-checkout">Checkout</a>
-                                            </li>
-                                        </ul>
+                                    <div class="cart__mini" id="miniCartContent">
+                                        {% include 'partials/mini_cart.html' %}
                                     </div>
                                 </div>
                             </div>
@@ -504,6 +460,112 @@
         </div>
     </div>
 </header>
+
+<style>
+    .search-suggest { position: relative; }
+    .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
+        margin-top: 8px;
+        max-height: 360px;
+        overflow-y: auto;
+        z-index: 2000;
+        display: none;
+    }
+    .search-results.is-open { display: block; }
+    .search-item {
+        display: flex;
+        gap: 12px;
+        padding: 10px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        text-decoration: none;
+        color: #0f172a;
+    }
+    .search-item:last-child { border-bottom: none; }
+    .search-item:hover { background: #f8fafc; }
+    .search-thumb {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        background: #f1f5f9;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+    .search-meta { display: flex; flex-direction: column; gap: 2px; }
+    .search-name { font-weight: 600; font-size: 14px; }
+    .search-price { font-size: 12px; color: #475569; }
+    .search-empty { padding: 12px; color: #64748b; font-size: 13px; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('mainSearchInput');
+    const resultsBox = document.getElementById('mainSearchResults');
+    if (!input || !resultsBox) return;
+
+    const searchUrl = input.dataset.searchUrl;
+    const placeholderImage = input.dataset.placeholderImage;
+    let debounceTimer;
+
+    const clearResults = () => {
+        resultsBox.innerHTML = '';
+        resultsBox.classList.remove('is-open');
+    };
+
+    const renderResults = (items) => {
+        if (!items.length) {
+            resultsBox.innerHTML = '<div class="search-empty">No products found.</div>';
+            resultsBox.classList.add('is-open');
+            return;
+        }
+
+        resultsBox.innerHTML = items.map((item) => {
+            const imageUrl = item.image_url || placeholderImage;
+            return `
+                <a class="search-item" href="${item.url}">
+                    <img class="search-thumb" src="${imageUrl}" alt="${item.name}">
+                    <span class="search-meta">
+                        <span class="search-name">${item.name}</span>
+                        <span class="search-price">&#8377;${item.price_display}</span>
+                    </span>
+                </a>
+            `;
+        }).join('');
+        resultsBox.classList.add('is-open');
+    };
+
+    input.addEventListener('input', function () {
+        const query = input.value.trim();
+        if (query.length < 2) {
+            clearResults();
+            return;
+        }
+
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            fetch(`${searchUrl}?q=${encodeURIComponent(query)}`)
+                .then((response) => response.json())
+                .then((data) => renderResults(data.results || []))
+                .catch(() => {
+                    resultsBox.innerHTML = '<div class="search-empty">Unable to search right now.</div>';
+                    resultsBox.classList.add('is-open');
+                });
+        }, 250);
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!resultsBox.contains(event.target) && event.target !== input) {
+            clearResults();
+        }
+    });
+});
+</script>
 
 <div class="offcanvas__area">
         <div class="offcanvas__wrapper">

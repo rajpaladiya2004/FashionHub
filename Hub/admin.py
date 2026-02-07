@@ -577,26 +577,37 @@ class PointsTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(ReturnRequest)
 class ReturnRequestAdmin(admin.ModelAdmin):
-    list_display = ('return_number', 'user', 'order', 'reason', 'status', 'refund_amount', 'created_at')
-    list_filter = ('status', 'reason', 'created_at')
+    list_display = ('return_number', 'user', 'order', 'reason', 'status', 'refund_amount', 'requested_at')
+    list_filter = ('status', 'reason', 'requested_at')
     search_fields = ('return_number', 'user__username', 'order__order_number')
-    readonly_fields = ('return_number', 'created_at', 'updated_at')
-    
+    readonly_fields = ('return_number', 'requested_at', 'created_at', 'updated_at')
+
     fieldsets = (
         ('Return Information', {
             'fields': ('return_number', 'order', 'user', 'order_item')
         }),
         ('Reason & Details', {
-            'fields': ('reason', 'description', 'images')
+            'fields': ('reason', 'reason_notes', 'description', 'images')
         }),
-        ('Status & Processing', {
-            'fields': ('status', 'admin_notes', 'pickup_date')
+        ('Status & Workflow', {
+            'fields': (
+                'status',
+                'approved_at',
+                'pickup_scheduled_at',
+                'received_at',
+                'qc_checked_at',
+                'resolved_at',
+                'admin_notes'
+            )
         }),
         ('Refund Information', {
-            'fields': ('refund_amount', 'refund_method', 'refund_date')
+            'fields': ('refund_amount', 'refund_method')
+        }),
+        ('Request Meta', {
+            'fields': ('request_ip', 'request_user_agent')
         }),
         ('Timestamps', {
-            'fields': ('created_at', 'updated_at')
+            'fields': ('requested_at', 'created_at', 'updated_at')
         }),
     )
 

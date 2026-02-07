@@ -4,7 +4,7 @@ from . import views
 urlpatterns = [
     # Admin Panel URLs
     path('admin-panel/', views.admin_dashboard, name='admin_dashboard'),
-    path('admin/new-dashboard/', views.admin_new_dashboard, name='admin_new_dashboard'),
+    path('admin-panel/new-dashboard/', views.admin_new_dashboard, name='admin_new_dashboard'),
     path('admin-panel/test/', views.admin_test, name='admin_test'),
     path('admin-panel/add-product/', views.admin_add_product, name='admin_add_product'),
     path('admin-panel/products/', views.admin_product_list, name='admin_product_list'),
@@ -49,6 +49,9 @@ urlpatterns = [
     path('admin-panel/reviews/<int:review_id>/approve/', views.admin_approve_review, name='admin_approve_review'),
     path('admin-panel/reviews/<int:review_id>/delete/', views.admin_delete_review, name='admin_delete_review'),
     path('admin-panel/product/<int:product_id>/add-review/', views.admin_add_review, name='admin_add_review'),
+    path('admin-panel/returns/', views.admin_returns, name='admin_returns'),
+    path('admin-panel/returns/<int:return_id>/', views.admin_return_detail, name='admin_return_detail'),
+    path('admin-panel/razorpay/health/', views.admin_razorpay_health, name='admin_razorpay_health'),
     
     # Auth
     path('accounts/login/', views.login_view, name='accounts_login'),
@@ -56,6 +59,10 @@ urlpatterns = [
     # Profile
     path('profile/', views.profile_view, name='profile'),
     path('api/profile/stats/', views.api_profile_stats, name='api_profile_stats'),
+    path('api/products/search/', views.product_search_api, name='product_search_api'),
+    path('api/upi/validate/', views.validate_upi_id, name='validate_upi_id'),
+    path('api/ifsc/lookup/', views.lookup_ifsc, name='lookup_ifsc'),
+    path('api/cart/summary/', views.cart_summary, name='cart_summary'),
 
     # Support Chat
     path('chat/thread/', views.chat_thread, name='chat_thread'),
@@ -91,6 +98,8 @@ urlpatterns = [
     path('track-order/', views.track_order_page, name='track_order'),
     path('order/download-invoice/<str:order_number>/', views.download_invoice, name='download_invoice'),
     path('order/<str:order_number>/', views.order_details, name='order_details'),
+    path('order/<int:order_id>/return/', views.return_request, name='return_request'),
+    path('returns/<int:return_id>/', views.return_status, name='return_status'),
     path('order/track/<str:order_number>/', views.order_tracking, name='order_tracking'),
     path('order/cancel/<int:order_id>/', views.customer_cancel_order, name='customer_cancel_order'),
     

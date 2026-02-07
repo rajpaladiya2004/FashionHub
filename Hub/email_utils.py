@@ -1,5 +1,5 @@
 """
-Email utility functions for FashionHub
+Email utility functions for VibeMall
 Handles sending order confirmations, status updates, and other notifications
 """
 

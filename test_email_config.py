@@ -6,9 +6,9 @@ import sys
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'FashionHub.FashioHub.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'VibeMall.FashioHub.settings')
 sys.path.insert(0, os.path.dirname(__file__))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'FashionHub'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'VibeMall'))
 django.setup()
 
 from django.core.mail import send_mail, EmailMultiAlternatives

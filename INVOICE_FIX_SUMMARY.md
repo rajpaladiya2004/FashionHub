@@ -55,7 +55,7 @@ if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
 ### Comprehensive Test Output
 ```
 ✓ Order found: ORD20260201011
-✓ Mock request created for user: FashionHub
+✓ Mock request created for user: VibeMall
 ✓ View returned HTTP 200
 ✓ Valid PDF header found
 ✓ Content-Type: application/pdf
@@ -80,7 +80,7 @@ if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
    - User is logged in
    - User owns the order
 4. Invoice PDF is generated with:
-   - FashionHub header
+   - VibeMall header
    - Invoice details (date, order number, status)
    - Billing and shipping sections
    - Items table with:

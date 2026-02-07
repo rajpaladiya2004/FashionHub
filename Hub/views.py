@@ -8,9 +8,11 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
 from django.db.models import Count, Q, Avg, Sum, F, DecimalField, ExpressionWrapper, Case, When, Value, IntegerField
+from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime, parse_date
 from django.conf import settings
 from django.urls import reverse
 from django.core.mail import send_mail, EmailMultiAlternatives
@@ -20,10 +22,31 @@ from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
 from decimal import Decimal
+from datetime import timedelta, datetime, time
 from urllib.parse import urlencode
+import re
+import json
+import base64
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 import logging
 
-from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction, MainPageProduct, ChatThread, ChatMessage, ChatAttachment
+logger = logging.getLogger(__name__)
+
+RETURN_WINDOW_DAYS = 7
+MAX_RETURN_ATTEMPTS = 1
+NON_RETURNABLE_CATEGORIES = set()
+
+RETURN_STATUS_FLOW = {
+    'REQUESTED': ['APPROVED', 'REJECTED', 'CANCELLED'],
+    'APPROVED': ['PICKUP_SCHEDULED', 'REJECTED'],
+    'PICKUP_SCHEDULED': ['RECEIVED'],
+    'RECEIVED': ['QC_PASSED', 'QC_FAILED'],
+    'QC_PASSED': ['REFUNDED', 'REPLACED'],
+    'QC_FAILED': ['REFUNDED', 'REPLACED'],
+}
+
+from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, ReturnRequest, ReturnItem, ReturnHistory, ReturnAttachment, ReturnLabel, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction, MainPageProduct, ChatThread, ChatMessage, ChatAttachment
 from .email_utils import send_order_confirmation_email, send_order_status_update_email, send_admin_order_notification
 
 # ===== ADMIN PANEL VIEWS =====
@@ -981,7 +1004,7 @@ def generate_auto_reviews(product, review_total, target_avg, reviewer_user=None)
         return
 
     reviewer_name = "Admin"
-    reviewer_email = "admin@fashionhub.local"
+    reviewer_email = "admin@vibemall.local"
     if reviewer_user:
         reviewer_name = reviewer_user.get_full_name().strip() or reviewer_user.username
         reviewer_email = reviewer_user.email or reviewer_email
@@ -3456,6 +3479,7 @@ def shop(request):
     ).order_by('order')
 
     # Filters from query params
+    search_query = request.GET.get('q', '').strip()
     min_price = request.GET.get('min_price')
     max_price = request.GET.get('max_price')
     min_rating = request.GET.get('min_rating')
@@ -3475,6 +3499,14 @@ def shop(request):
             products = products.filter(rating__gte=float(min_rating))
         except ValueError:
             pass
+
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(sku__icontains=search_query) |
+            Q(brand__icontains=search_query) |
+            Q(tags__icontains=search_query)
+        )
 
     special_offers = Product.objects.filter(is_active=True).order_by('-discount_percent', '-id')[:5]
 
@@ -3529,10 +3561,36 @@ def shop(request):
         'min_price': min_price or '',
         'max_price': max_price or '',
         'selected_rating': min_rating or '',
+        'search_query': search_query,
         'wishlist_product_ids': wishlist_product_ids,
         'cart_product_ids': cart_product_ids,
         'product_stats': product_stats,
     })
+
+
+def product_search_api(request):
+    """Return top product matches for the header search dropdown."""
+    query = request.GET.get('q', '').strip()
+    results = []
+
+    if len(query) >= 2:
+        products = Product.objects.filter(is_active=True).filter(
+            Q(name__icontains=query) |
+            Q(sku__icontains=query) |
+            Q(brand__icontains=query) |
+            Q(tags__icontains=query)
+        ).order_by('name')[:8]
+
+        for product in products:
+            results.append({
+                'id': product.id,
+                'name': product.name,
+                'price_display': f"{product.price:.2f}",
+                'image_url': product.image.url if product.image else None,
+                'url': reverse('product-details', args=[product.id]),
+            })
+
+    return JsonResponse({'results': results})
 def shop_details(request): return render(request, 'shop-details.html')
 
 
@@ -3614,7 +3672,7 @@ def send_verification_email(user, request):
         f"/verify-email/{uid}/{token}/"
     )
 
-    subject = "Verify your FashionHub account"
+    subject = "Verify your VibeMall account"
     message = render_to_string('emails/verify_email.html', {
         'user': user,
         'verify_url': verify_url,
@@ -3822,6 +3880,24 @@ def add_to_cart(request):
         else:
             messages.error(request, "Product not found")
             return redirect('shop')
+
+
+@login_required(login_url='login')
+def cart_summary(request):
+    cart_items = Cart.objects.filter(user=request.user).select_related('product')
+    cart_count = cart_items.count()
+    cart_total_value = sum(item.get_total_price() for item in cart_items)
+    cart_total = f"{cart_total_value:.2f}"
+    mini_cart_html = render_to_string('partials/mini_cart.html', {
+        'cart_items': cart_items,
+        'cart_count': cart_count,
+        'cart_total': cart_total,
+    }, request=request)
+    return JsonResponse({
+        'cart_count': cart_count,
+        'cart_total': cart_total,
+        'mini_cart_html': mini_cart_html,
+    })
 
 
 @require_POST
@@ -4243,8 +4319,8 @@ def api_profile_stats(request):
 @login_required(login_url='login')
 def add_product(request):
     # Check if user is admin (username = 'admin')
-    if request.user.username != 'FashionHub':
-        messages.error(request, 'Access denied. Only FashionHub user can add products.')
+    if request.user.username != 'VibeMall':
+        messages.error(request, 'Access denied. Only VibeMall user can add products.')
         return redirect('index')
     
     if request.method == 'POST':
@@ -4553,6 +4629,7 @@ def admin_add_slider(request):
         try:
             title = request.POST.get('title')
             subtitle = request.POST.get('subtitle', '')
+            description = request.POST.get('description', '')
             top_button_text = request.POST.get('top_button_text', '')
             top_button_url = request.POST.get('top_button_url', '#')
             order = request.POST.get('order', 0)
@@ -4562,6 +4639,7 @@ def admin_add_slider(request):
             slider = Slider.objects.create(
                 title=title,
                 subtitle=subtitle,
+                description=description,
                 top_button_text=top_button_text,
                 top_button_url=top_button_url,
                 order=int(order) if order else 0,
@@ -4587,6 +4665,7 @@ def admin_edit_slider(request, slider_id):
         try:
             slider.title = request.POST.get('title')
             slider.subtitle = request.POST.get('subtitle', '')
+            slider.description = request.POST.get('description', '')
             slider.top_button_text = request.POST.get('top_button_text', '')
             slider.top_button_url = request.POST.get('top_button_url', '#')
             order = request.POST.get('order', 0)
@@ -5280,6 +5359,322 @@ def order_list(request):
     return render(request, 'order_list.html', {'orders': orders})
 
 
+def _calculate_return_refund_amount(return_request):
+    subtotal = Decimal('0')
+    total_items_qty = 0
+    returned_qty = 0
+
+    for item in return_request.items.select_related('order_item'):
+        subtotal += item.order_item.product_price * item.quantity
+        returned_qty += item.quantity
+
+    for order_item in return_request.order.items.all():
+        total_items_qty += order_item.quantity
+
+    order_subtotal = return_request.order.subtotal or Decimal('0')
+    order_tax = return_request.order.tax or Decimal('0')
+    order_shipping = return_request.order.shipping_cost or Decimal('0')
+
+    tax_refund = Decimal('0')
+    shipping_refund = Decimal('0')
+
+    if order_subtotal > 0:
+        tax_refund = (subtotal / order_subtotal) * order_tax
+
+    if returned_qty >= total_items_qty and total_items_qty > 0:
+        shipping_refund = order_shipping
+
+    return (subtotal + tax_refund + shipping_refund).quantize(Decimal('0.01'))
+
+
+def _return_eligibility(order):
+    if order.order_status != 'DELIVERED':
+        return False, 'Returns are allowed only after delivery.', None, []
+
+    if not order.delivery_date:
+        return False, 'Delivery date is not available yet.', None, []
+
+    deadline = order.delivery_date + timedelta(days=RETURN_WINDOW_DAYS)
+    if timezone.now() > deadline:
+        return False, f'Return window closed on {deadline.strftime("%d %b %Y")}.', deadline, []
+
+    if order.return_requests.count() >= MAX_RETURN_ATTEMPTS:
+        return False, 'Maximum return attempts reached for this order.', deadline, []
+
+    eligible_items = []
+    for item in order.items.select_related('product'):
+        if item.product and item.product.category in NON_RETURNABLE_CATEGORIES:
+            continue
+        eligible_items.append(item)
+
+    if not eligible_items:
+        return False, 'No returnable items found in this order.', deadline, []
+
+    return True, '', deadline, eligible_items
+
+
+def _log_return_history(return_request, old_status, new_status, user=None, notes=''):
+    ReturnHistory.objects.create(
+        return_request=return_request,
+        old_status=old_status,
+        new_status=new_status,
+        changed_by=user,
+        notes=notes
+    )
+
+
+def _send_return_notification(return_request, subject, message, template_name='emails/return_status_update.html'):
+    recipients = [return_request.user.email] if return_request.user.email else []
+    if not recipients:
+        return
+
+    status_url = ''
+    try:
+        status_url = reverse('return_status', args=[return_request.id])
+    except Exception:
+        status_url = ''
+
+    site_url = getattr(settings, 'SITE_URL', 'http://127.0.0.1:8000').rstrip('/')
+    full_status_url = f"{site_url}{status_url}" if status_url else site_url
+
+    text_content = f"""{message}
+
+Return Number: {return_request.return_number}
+Order Number: {return_request.order.order_number}
+Status: {return_request.get_status_display()}
+
+View: {full_status_url}
+"""
+
+    try:
+        html_content = render_to_string(template_name, {
+            'return_request': return_request,
+            'message': message,
+            'status_label': return_request.get_status_display(),
+            'status_url': full_status_url,
+        })
+        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, recipients)
+        email.attach_alternative(html_content, "text/html")
+        email.send(fail_silently=True)
+    except Exception:
+        pass
+
+
+def _send_admin_return_notification(return_request, request):
+    admin_email = _get_admin_chat_email()
+    if not admin_email:
+        return
+
+    site_url = request.build_absolute_uri('/').rstrip('/')
+    admin_return_url = f"{site_url}{reverse('admin_return_detail', args=[return_request.id])}"
+    subject = f"New Return Request - {return_request.return_number}"
+
+    bank_lines = ''
+    if return_request.refund_method == 'BANK':
+        bank_lines = (
+            f"Bank Name: {return_request.bank_name}\n"
+            f"Account Name: {return_request.bank_account_name}\n"
+            f"Account Number: {return_request.bank_account_number}\n"
+            f"IFSC: {return_request.bank_ifsc}\n"
+        )
+
+    text_content = f"""New return request submitted.
+
+Return Number: {return_request.return_number}
+Order Number: {return_request.order.order_number}
+Customer: {return_request.user.get_full_name() or return_request.user.username}
+Reason: {return_request.get_reason_display()}
+Status: {return_request.get_status_display()}
+Refund Method: {return_request.refund_method}
+{bank_lines}
+Open: {admin_return_url}
+"""
+
+    try:
+        html_content = render_to_string('emails/admin_return_request.html', {
+            'return_request': return_request,
+            'admin_return_url': admin_return_url,
+        })
+        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [admin_email])
+        email.attach_alternative(html_content, "text/html")
+        email.send(fail_silently=True)
+    except Exception:
+        pass
+
+
+def _process_refund(return_request, amount, refund_method=''):
+    order = return_request.order
+    refund_method = refund_method or order.payment_method
+
+    if amount is None:
+        amount = _calculate_return_refund_amount(return_request)
+
+    try:
+        amount = Decimal(str(amount))
+    except Exception:
+        amount = Decimal('0.00')
+
+    fee = Decimal('20.00') if amount > 0 else Decimal('0.00')
+    net_amount = max(amount - fee, Decimal('0.00'))
+
+    refund_success = False
+    refund_notes = ''
+
+    if refund_method == 'RAZORPAY' and order.razorpay_payment_id:
+        try:
+            import razorpay
+            razorpay_key = getattr(settings, 'RAZORPAY_KEY_ID', '')
+            razorpay_secret = getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+            if razorpay_key and razorpay_secret:
+                client = razorpay.Client(auth=(razorpay_key, razorpay_secret))
+                client.payment.refund(order.razorpay_payment_id, {
+                    'amount': int(float(net_amount) * 100),
+                    'notes': {
+                        'return_id': str(return_request.id),
+                        'order_number': order.order_number,
+                    }
+                })
+                refund_success = True
+            else:
+                refund_notes = 'Razorpay keys missing'
+        except Exception as exc:
+            refund_notes = f'Razorpay refund failed: {exc}'
+    elif refund_method == 'WALLET':
+        profile, _ = UserProfile.objects.get_or_create(user=return_request.user)
+        profile.wallet_balance = (profile.wallet_balance or Decimal('0.00')) + net_amount
+        profile.save(update_fields=['wallet_balance'])
+        refund_success = True
+    else:
+        refund_success = True
+
+    return_request.refund_amount = amount
+    return_request.refund_fee = fee
+    return_request.refund_amount_net = net_amount
+    return_request.refund_method = refund_method
+    if refund_notes:
+        return_request.admin_notes = f"{refund_notes}\n{return_request.admin_notes}".strip()
+
+    if refund_success and order.payment_status == 'PAID':
+        order.payment_status = 'REFUNDED'
+        order.save(update_fields=['payment_status'])
+
+    return refund_success
+
+
+def _verify_upi_with_razorpay(upi_id):
+    razorpay_key = getattr(settings, 'RAZORPAY_KEY_ID', '')
+    razorpay_secret = getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+    if not razorpay_key or not razorpay_secret:
+        return False, '', 'Razorpay keys missing'
+
+    url = 'https://api.razorpay.com/v1/payments/validate/vpa'
+    payload = urlencode({'vpa': upi_id}).encode('utf-8')
+    auth = base64.b64encode(f"{razorpay_key}:{razorpay_secret}".encode('utf-8')).decode('utf-8')
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': f'Basic {auth}',
+    }
+
+    request = Request(url, data=payload, headers=headers, method='POST')
+    try:
+        with urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        if getattr(settings, 'RAZORPAY_UPI_DEBUG', False):
+            masked_upi = f"{upi_id[:3]}***{upi_id[upi_id.find('@'):]}" if '@' in upi_id else '***'
+            logger.info('Razorpay UPI validate response for %s: %s', masked_upi, data)
+    except HTTPError as exc:
+        body = ''
+        try:
+            body = exc.read().decode('utf-8')
+            parsed = json.loads(body) if body else {}
+        except Exception:
+            parsed = {}
+        if getattr(settings, 'RAZORPAY_UPI_DEBUG', False):
+            logger.warning('Razorpay UPI validate HTTPError %s: %s', exc.code, body)
+        message = (
+            parsed.get('error', {}).get('description')
+            if isinstance(parsed, dict)
+            else ''
+        )
+        return False, '', message or f'Validation failed: {exc.code}'
+    except URLError:
+        return False, '', 'Unable to reach Razorpay'
+    except Exception:
+        return False, '', 'Validation failed'
+
+    name = (data.get('customer_name') or data.get('name') or '').strip()
+    valid = data.get('success') is True or data.get('valid') is True or bool(name)
+    if not valid:
+        return False, '', 'UPI ID not found'
+
+    return True, name, ''
+
+
+def _lookup_ifsc_details(ifsc_code):
+    if not ifsc_code:
+        return False, '', '', 'IFSC code is required.'
+    ifsc_code = ifsc_code.strip().upper()
+    if not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", ifsc_code):
+        return False, '', '', 'Please enter a valid IFSC code.'
+
+    url = f"https://ifsc.razorpay.com/{ifsc_code}"
+    try:
+        with urlopen(url, timeout=6) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+        bank = (payload.get('BANK') or '').strip()
+        branch = (payload.get('BRANCH') or '').strip()
+        if not bank and not branch:
+            return False, '', '', 'IFSC details not found.'
+        return True, bank, branch, ''
+    except HTTPError as exc:
+        if exc.code == 404:
+            return False, '', '', 'IFSC details not found.'
+        return False, '', '', 'Unable to fetch IFSC details.'
+    except URLError:
+        return False, '', '', 'Unable to reach IFSC service.'
+    except Exception:
+        return False, '', '', 'IFSC lookup failed. Try again later.'
+
+
+@login_required(login_url='login')
+@require_POST
+def validate_upi_id(request):
+    upi_id = (request.POST.get('upi_id') or '').strip().lower()
+    if not upi_id:
+        return JsonResponse({'valid': False, 'message': 'UPI ID is required.'}, status=400)
+
+    if not re.fullmatch(r"[a-z0-9._-]{2,256}@[a-z]{2,64}", upi_id):
+        return JsonResponse({'valid': False, 'message': 'UPI ID format is invalid.'}, status=400)
+
+    valid, name, message = _verify_upi_with_razorpay(upi_id)
+    if not valid:
+        return JsonResponse({'valid': False, 'message': message or 'UPI ID not found.'}, status=400)
+
+    return JsonResponse({'valid': True, 'name': name})
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_razorpay_health(request):
+    key_id = getattr(settings, 'RAZORPAY_KEY_ID', '')
+    key_secret = getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+    return JsonResponse({
+        'ok': bool(key_id and key_secret),
+        'has_key_id': bool(key_id),
+        'has_key_secret': bool(key_secret),
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+def lookup_ifsc(request):
+    ifsc_code = request.POST.get('ifsc', '').strip()
+    valid, bank, branch, message = _lookup_ifsc_details(ifsc_code)
+    if not valid:
+        return JsonResponse({'valid': False, 'message': message or 'IFSC details not found.'}, status=400)
+    return JsonResponse({'valid': True, 'bank': bank, 'branch': branch})
+
+
 def track_order_page(request):
     """Order tracking search page"""
     if request.method == 'POST':
@@ -5300,9 +5695,16 @@ def order_details(request, order_number):
     try:
         order = Order.objects.get(order_number=order_number, user=request.user)
         order_items = OrderItem.objects.filter(order=order)
+        is_return_eligible, return_reason, return_deadline, eligible_items = _return_eligibility(order)
+        active_return = order.return_requests.order_by('-requested_at').first()
         return render(request, 'order_details.html', {
             'order': order,
-            'order_items': order_items
+            'order_items': order_items,
+            'is_return_eligible': is_return_eligible,
+            'return_reason': return_reason,
+            'return_deadline': return_deadline,
+            'return_items_eligible': eligible_items,
+            'active_return': active_return,
         })
     except Order.DoesNotExist:
         messages.error(request, 'Order not found')
@@ -5317,13 +5719,270 @@ def order_tracking(request, order_number):
     try:
         order = Order.objects.get(order_number=order_number, user=request.user)
         order_items = OrderItem.objects.filter(order=order)
+        return_request_obj = order.return_requests.order_by('-requested_at').first()
+        return_history = None
+        if return_request_obj:
+            return_history = return_request_obj.history.select_related('changed_by')
         return render(request, 'order_tracking.html', {
             'order': order,
-            'order_items': order_items
+            'order_items': order_items,
+            'return_request': return_request_obj,
+            'return_history': return_history,
         })
     except Order.DoesNotExist:
         messages.error(request, 'Order not found')
         return redirect('order_list')
+
+
+@login_required(login_url='login')
+def return_request(request, order_id):
+    """Create a return request for a delivered order"""
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    is_eligible, ineligible_reason, deadline, eligible_items = _return_eligibility(order)
+    existing_return = order.return_requests.order_by('-requested_at').first()
+    refund_options = [
+        ('WALLET', 'VibeMall Wallet'),
+        ('BANK', 'Direct Bank Transfer'),
+        ('RAZORPAY', 'RazorPay'),
+    ]
+
+    if request.method == 'POST':
+        if not is_eligible:
+            messages.error(request, ineligible_reason)
+            return redirect('order_details', order_number=order.order_number)
+
+        selected_items = []
+        for item in eligible_items:
+            if request.POST.get(f'item_{item.id}_selected') == 'on':
+                qty_raw = request.POST.get(f'item_{item.id}_qty', '0')
+                try:
+                    qty = int(qty_raw)
+                except ValueError:
+                    qty = 0
+
+                if qty < 1 or qty > item.quantity:
+                    messages.error(request, f'Invalid quantity for {item.product_name}.')
+                    return redirect('return_request', order_id=order.id)
+
+                condition = request.POST.get(f'item_{item.id}_condition', 'OPENED')
+                notes = request.POST.get(f'item_{item.id}_notes', '').strip()
+                selected_items.append((item, qty, condition, notes))
+
+        if not selected_items:
+            messages.error(request, 'Select at least one item to return.')
+            return redirect('return_request', order_id=order.id)
+
+        reason = request.POST.get('reason', 'OTHER')
+        reason_notes = request.POST.get('reason_notes', '').strip()
+        refund_method = request.POST.get('refund_method', '').strip()
+        bank_account_name = request.POST.get('bank_account_name', '').strip()
+        bank_account_number = request.POST.get('bank_account_number', '').strip()
+        bank_ifsc = request.POST.get('bank_ifsc', '').strip()
+        bank_name = request.POST.get('bank_name', '').strip()
+        upi_id = request.POST.get('upi_id', '').strip()
+        allowed_refunds = {value for value, _ in refund_options}
+        if refund_method not in allowed_refunds:
+            messages.error(request, 'Please select a valid refund method.')
+            return redirect('return_request', order_id=order.id)
+        if refund_method == 'BANK':
+            if not bank_account_name or not bank_account_number or not bank_ifsc or not bank_name:
+                messages.error(request, 'Please enter all bank transfer details.')
+                return redirect('return_request', order_id=order.id)
+            if not re.fullmatch(r"[0-9]{6,34}", bank_account_number):
+                messages.error(request, 'Please enter a valid bank account number.')
+                return redirect('return_request', order_id=order.id)
+            bank_ifsc = bank_ifsc.upper()
+            if not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", bank_ifsc):
+                messages.error(request, 'Please enter a valid IFSC code.')
+                return redirect('return_request', order_id=order.id)
+        if refund_method == 'RAZORPAY':
+            if not upi_id:
+                messages.error(request, 'Please enter a valid UPI ID.')
+                return redirect('return_request', order_id=order.id)
+            upi_id = upi_id.lower()
+            if not re.fullmatch(r"[a-z0-9._-]{2,256}@[a-z]{2,64}", upi_id):
+                messages.error(request, 'Please enter a valid UPI ID.')
+                return redirect('return_request', order_id=order.id)
+            valid_upi, upi_name, error_msg = _verify_upi_with_razorpay(upi_id)
+            if not valid_upi:
+                messages.error(request, error_msg or 'UPI ID not found.')
+                return redirect('return_request', order_id=order.id)
+
+        return_request_obj = ReturnRequest.objects.create(
+            order=order,
+            user=request.user,
+            reason=reason,
+            reason_notes=reason_notes,
+            refund_method=refund_method,
+            bank_account_name=bank_account_name if refund_method == 'BANK' else '',
+            bank_account_number=bank_account_number if refund_method == 'BANK' else '',
+            bank_ifsc=bank_ifsc if refund_method == 'BANK' else '',
+            bank_name=bank_name if refund_method == 'BANK' else '',
+            upi_id=upi_id if refund_method == 'RAZORPAY' else '',
+            upi_name=upi_name if refund_method == 'RAZORPAY' else '',
+            request_ip=request.META.get('REMOTE_ADDR'),
+            request_user_agent=(request.META.get('HTTP_USER_AGENT') or '')[:255]
+        )
+
+        for item, qty, condition, notes in selected_items:
+            ReturnItem.objects.create(
+                return_request=return_request_obj,
+                order_item=item,
+                product=item.product,
+                quantity=qty,
+                condition=condition,
+                notes=notes
+            )
+
+        for attachment in request.FILES.getlist('attachments'):
+            ReturnAttachment.objects.create(
+                return_request=return_request_obj,
+                file=attachment,
+                original_name=attachment.name,
+                content_type=getattr(attachment, 'content_type', ''),
+                size_bytes=getattr(attachment, 'size', 0)
+            )
+
+        _log_return_history(return_request_obj, '', 'REQUESTED', request.user, 'Return requested by customer')
+        _send_return_notification(
+            return_request_obj,
+            f'Return Request Received - {order.order_number}',
+            f'We received your return request for order {order.order_number}. We will update you soon.'
+        )
+        _send_admin_return_notification(return_request_obj, request)
+
+        messages.success(request, 'Return request submitted successfully.')
+        return redirect('return_status', return_id=return_request_obj.id)
+
+    return render(request, 'return_request.html', {
+        'order': order,
+        'eligible_items': eligible_items,
+        'is_eligible': is_eligible,
+        'ineligible_reason': ineligible_reason,
+        'return_deadline': deadline,
+        'existing_return': existing_return,
+        'reason_choices': ReturnRequest.RETURN_REASON_CHOICES,
+        'condition_choices': ReturnItem.CONDITION_CHOICES,
+        'refund_options': refund_options,
+    })
+
+
+@login_required(login_url='login')
+def return_status(request, return_id):
+    """Show return request status for a user"""
+    return_request_obj = get_object_or_404(ReturnRequest, id=return_id, user=request.user)
+    return render(request, 'return_status.html', {
+        'return_request': return_request_obj,
+        'history': return_request_obj.history.select_related('changed_by')
+    })
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_returns(request):
+    """Admin return requests list"""
+    returns = ReturnRequest.objects.select_related('order', 'user').prefetch_related('items')
+
+    status_filter = request.GET.get('status', '').strip()
+    search_query = request.GET.get('search', '').strip()
+
+    if status_filter:
+        returns = returns.filter(status=status_filter)
+
+    if search_query:
+        returns = returns.filter(
+            Q(order__order_number__icontains=search_query) |
+            Q(user__username__icontains=search_query) |
+            Q(user__email__icontains=search_query)
+        )
+
+    refund_total = ReturnRequest.objects.filter(status='REFUNDED').aggregate(
+        total=Sum(Coalesce('refund_amount_net', 'refund_amount'))
+    )['total'] or 0
+
+    return render(request, 'admin_panel/returns.html', {
+        'returns': returns.order_by('-requested_at'),
+        'status_filter': status_filter,
+        'search_query': search_query,
+        'refund_total': refund_total,
+        'status_choices': ReturnRequest.STATUS_CHOICES,
+    })
+
+
+@login_required(login_url='login')
+@staff_member_required(login_url='login')
+def admin_return_detail(request, return_id):
+    """Admin return request detail and workflow"""
+    return_request_obj = get_object_or_404(ReturnRequest, id=return_id)
+    allowed_next = RETURN_STATUS_FLOW.get(return_request_obj.status, [])
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        notes = request.POST.get('notes', '').strip()
+
+        if action not in allowed_next:
+            messages.error(request, 'Invalid status transition.')
+            return redirect('admin_return_detail', return_id=return_request_obj.id)
+
+        old_status = return_request_obj.status
+        now = timezone.now()
+        return_request_obj.status = action
+
+        if action == 'APPROVED':
+            return_request_obj.approved_at = now
+        elif action == 'PICKUP_SCHEDULED':
+            pickup_at = request.POST.get('pickup_scheduled_at')
+            if pickup_at:
+                parsed = parse_datetime(pickup_at)
+                if not parsed:
+                    date_only = parse_date(pickup_at)
+                    if date_only:
+                        parsed = timezone.make_aware(datetime.combine(date_only, time(hour=10, minute=0)))
+                return_request_obj.pickup_scheduled_at = parsed if parsed else now
+            else:
+                return_request_obj.pickup_scheduled_at = now
+        elif action == 'RECEIVED':
+            return_request_obj.received_at = now
+        elif action in ['QC_PASSED', 'QC_FAILED']:
+            return_request_obj.qc_checked_at = now
+            if action == 'QC_PASSED':
+                for item in return_request_obj.items.select_related('product'):
+                    if item.product:
+                        item.product.stock = F('stock') + item.quantity
+                        item.product.save(update_fields=['stock'])
+        elif action in ['REFUNDED', 'REPLACED']:
+            return_request_obj.resolved_at = now
+            if action == 'REFUNDED':
+                refund_amount_raw = request.POST.get('refund_amount', '').strip()
+                refund_amount = None
+                if refund_amount_raw:
+                    try:
+                        refund_amount = Decimal(refund_amount_raw)
+                    except Exception:
+                        refund_amount = None
+                refund_method = request.POST.get('refund_method', '').strip()
+                _process_refund(return_request_obj, refund_amount, refund_method)
+
+        if notes:
+            stamped_notes = f"[{now.strftime('%d %b %Y %H:%M')}] {notes}"
+            return_request_obj.admin_notes = f"{stamped_notes}\n{return_request_obj.admin_notes}".strip()
+
+        return_request_obj.save()
+        _log_return_history(return_request_obj, old_status, action, request.user, notes)
+        _send_return_notification(
+            return_request_obj,
+            f'Return Update - {return_request_obj.order.order_number}',
+            f'Your return request is now {action.replace("_", " ").title()}.'
+        )
+
+        messages.success(request, f'Return updated to {action}.')
+        return redirect('admin_return_detail', return_id=return_request_obj.id)
+
+    return render(request, 'admin_panel/return_detail.html', {
+        'return_request': return_request_obj,
+        'history': return_request_obj.history.select_related('changed_by'),
+        'allowed_next': allowed_next,
+    })
 
 
 @login_required(login_url='login')

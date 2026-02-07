@@ -6,17 +6,17 @@ django.setup()
 
 from django.contrib.auth.models import User
 
-# Check if FashionHub user exists
-if User.objects.filter(username='FashionHub').exists():
-    print("✓ User 'FashionHub' already exists")
+# Check if VibeMall user exists
+if User.objects.filter(username='VibeMall').exists():
+    print("✓ User 'VibeMall' already exists")
 else:
-    # Create FashionHub superuser
+    # Create VibeMall superuser
     user = User.objects.create_superuser(
-        username='FashionHub',
-        email='fashionhub@admin.com',
-        password='FashionHub@123'
+        username='VibeMall',
+        email='vibemall@admin.com',
+        password='VibeMall@123'
     )
-    print("✓ Created superuser 'FashionHub'")
-    print("  Username: FashionHub")
-    print("  Password: FashionHub@123")
-    print("  Email: fashionhub@admin.com")
+    print("✓ Created superuser 'VibeMall'")
+    print("  Username: VibeMall")
+    print("  Password: VibeMall@123")
+    print("  Email: vibemall@admin.com")

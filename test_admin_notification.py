@@ -6,9 +6,9 @@ import sys
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'FashionHub.FashioHub.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'VibeMall.FashioHub.settings')
 sys.path.insert(0, 'D:\\web\\FashioHub')
-sys.path.insert(0, 'D:\\web\\FashioHub\\FashionHub')
+sys.path.insert(0, 'D:\\web\\FashioHub\\VibeMall')
 django.setup()
 
 from django.contrib.auth.models import User

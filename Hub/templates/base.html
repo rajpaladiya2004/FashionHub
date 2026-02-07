@@ -4,11 +4,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{% block title %}FashionHub{% endblock %}</title>
+    <title>{% block title %}VibeMall{% endblock %}</title>
     <head>
 <meta charset="utf-8">
 <meta http-equiv="x-ua-compatible" content="ie=edge">
-<title>FashionHub - Clean, Minimal E-commerce HTML5 Template</title>
+<title>VibeMall - Clean, Minimal E-commerce HTML5 Template</title>
 <meta name="description" content="">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="shortcut icon" type="image/x-icon" href="{% static 'assets/img/favicon.png' %}">
@@ -181,6 +181,66 @@
         <script src="{% static 'assets/js/ajax-form.js' %}"></script>
         <script src="{% static 'assets/js/main.js' %}"></script>
         <script src="{% static 'assets/js/custom-fixes.js' %}"></script>
+
+        <script>
+            (function () {
+                const isAuthed = typeof userAuthenticated !== 'undefined' ? userAuthenticated : false;
+                if (!isAuthed) return;
+
+                const updateCartDom = (data) => {
+                    const countNodes = document.querySelectorAll('.cart-count');
+                    const totalNodes = document.querySelectorAll('.cart-total');
+                    const miniCountNodes = document.querySelectorAll('.cart-mini-count');
+                    const miniCart = document.getElementById('miniCartContent');
+
+                    if (countNodes.length) {
+                        countNodes.forEach((node) => {
+                            node.textContent = data.cart_count ?? node.textContent;
+                        });
+                    }
+                    if (totalNodes.length) {
+                        totalNodes.forEach((node) => {
+                            node.textContent = data.cart_total ?? node.textContent;
+                        });
+                    }
+                    if (miniCountNodes.length) {
+                        miniCountNodes.forEach((node) => {
+                            node.textContent = data.cart_count ?? node.textContent;
+                        });
+                    }
+                    if (miniCart && data.mini_cart_html) {
+                        miniCart.innerHTML = data.mini_cart_html;
+                    }
+                };
+
+                window.refreshMiniCart = function () {
+                    fetch('{% url "cart_summary" %}', { credentials: 'same-origin' })
+                        .then((res) => res.json())
+                        .then(updateCartDom)
+                        .catch(() => {});
+                };
+
+                let cartHoverTimer;
+                const cartBlock = document.querySelector('.block-cart');
+                const triggerCartRefresh = () => {
+                    clearTimeout(cartHoverTimer);
+                    cartHoverTimer = setTimeout(() => {
+                        if (typeof window.refreshMiniCart === 'function') {
+                            window.refreshMiniCart();
+                        }
+                    }, 150);
+                };
+                if (cartBlock) {
+                    cartBlock.addEventListener('mouseenter', triggerCartRefresh);
+                    cartBlock.addEventListener('focusin', triggerCartRefresh);
+                    cartBlock.addEventListener('click', triggerCartRefresh);
+                }
+
+                document.addEventListener('cart:updated', () => {
+                    window.refreshMiniCart();
+                });
+            })();
+        </script>
 
         <style>
             #supportChatWidget {

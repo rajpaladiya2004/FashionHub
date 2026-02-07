@@ -419,7 +419,7 @@
         const usernameInput = document.getElementById('username');
         
         // Load saved username if exists
-        const savedUsername = localStorage.getItem('fashionhub_remember_me');
+        const savedUsername = localStorage.getItem('vibemall_remember_me');
         if (savedUsername) {
             usernameInput.value = savedUsername;
             rememberCheckbox.checked = true;
@@ -429,9 +429,9 @@
         if (loginForm) {
             loginForm.addEventListener('submit', function() {
                 if (rememberCheckbox.checked) {
-                    localStorage.setItem('fashionhub_remember_me', usernameInput.value);
+                    localStorage.setItem('vibemall_remember_me', usernameInput.value);
                 } else {
-                    localStorage.removeItem('fashionhub_remember_me');
+                    localStorage.removeItem('vibemall_remember_me');
                 }
             });
         }

@@ -650,6 +650,57 @@
                 </li>
             </ul>
 
+            {% if return_request %}
+            <div class="products-section">
+                <h2 class="products-title"><i class="fas fa-undo"></i> Return Tracking</h2>
+                <div class="product-card" style="align-items: flex-start;">
+                    <div class="product-details">
+                        <div class="product-name">Current Status: {{ return_request.status|title }}</div>
+                        {% if return_request.refund_amount %}
+                        <div class="product-meta">Refund: ₹{{ return_request.refund_amount }}{% if return_request.refund_method %} via {{ return_request.refund_method }}{% endif %}</div>
+                        {% endif %}
+                        <div class="product-meta" style="margin-top: 10px;">
+                            <a href="{% url 'return_status' return_request.id %}">View full return details</a>
+                        </div>
+                    </div>
+                </div>
+
+                <ul class="timeline" style="margin-top: 30px;">
+                    {% for entry in return_history %}
+                    <li class="timeline-item completed">
+                        <div class="timeline-icon">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <h3 class="timeline-title">{{ entry.new_status|title }}</h3>
+                            <div class="timeline-date">
+                                <i class="far fa-calendar-alt"></i>
+                                {{ entry.created_at|date:"d M, Y - h:i A" }}
+                            </div>
+                            <p class="timeline-description">{{ entry.note|default:"Return updated." }}</p>
+                            <span class="status-badge completed">Completed</span>
+                        </div>
+                    </li>
+                    {% empty %}
+                    <li class="timeline-item active">
+                        <div class="timeline-icon">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <h3 class="timeline-title">Return Requested</h3>
+                            <div class="timeline-date">
+                                <i class="far fa-calendar-alt"></i>
+                                {{ return_request.requested_at|date:"d M, Y - h:i A" }}
+                            </div>
+                            <p class="timeline-description">We have received your return request.</p>
+                            <span class="status-badge active">In Progress</span>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
             <!-- Products Section -->
             <div class="products-section">
                 <h2 class="products-title"><i class="fas fa-shopping-bag"></i> Order Items</h2>

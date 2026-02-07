@@ -17,23 +17,23 @@
     <div class="container">
         <div class="row">
             <div class="col-xl-12">
-                <div class="page-banner-content text-center">
-                    <h4 class="breadcrumb-title">Order Confirmation</h4>
-                    <div class="breadcrumb-two">
-                        <nav>
-                           <nav class="breadcrumb-trail breadcrumbs">
-                              <ul class="breadcrumb-menu">
-                                 <li class="breadcrumb-trail">
-                                    <a href="{% url 'index' %}"><span>Home</span></a>
-                                 </li>
-                                 <li class="trail-item">
-                                    <span>Order Confirmation</span>
-                                 </li>
-                              </ul>
-                           </nav> 
-                        </nav>
-                    </div>
-                </div>
+                     <div class="page-banner-content text-center">
+                          <h4 class="breadcrumb-title">Order Confirmation</h4>
+                          <div class="breadcrumb-two">
+                                <nav>
+                                    <nav class="breadcrumb-trail breadcrumbs">
+                                        <ul class="breadcrumb-menu">
+                                            <li class="breadcrumb-trail">
+                                                <a href="{% url 'index' %}"><span>Home</span></a>
+                                            </li>
+                                            <li class="trail-item">
+                                                <span>Order Confirmation</span>
+                                            </li>
+                                        </ul>
+                                    </nav> 
+                                </nav>
+                          </div>
+                     </div>
             </div>
         </div>
     </div>
@@ -128,6 +128,11 @@
                                 <span class="badge bg-secondary">{{ order.payment_status }}</span>
                             {% endif %}
                         </div>
+                    </div>
+
+                    <div class="order-actions mt-4 text-center">
+                        <a href="{% url 'download_invoice' order.order_number %}" class="tp-btn-h1 me-2" style="background-color: #ff9800;">Download Invoice</a>
+                        <a href="{% url 'order_details' order.order_number %}" class="tp-btn-h1">View Order Details</a>
                     </div>
                 </div>
             </div>

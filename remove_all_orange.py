@@ -1,7 +1,7 @@
 import re
 
 # File path
-filepath = r'd:\web\FashioHub\FashionHub\Hub\templates\index.html'
+filepath = r'd:\web\FashioHub\VibeMall\Hub\templates\index.html'
 
 # Read file
 with open(filepath, 'r', encoding='utf-8') as f:

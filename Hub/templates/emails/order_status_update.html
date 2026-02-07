@@ -12,18 +12,19 @@
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
             padding: 20px;
+            line-height: 1.6;
         }
         
         .email-container {
-            max-width: 650px;
+            max-width: 600px;
             margin: 0 auto;
             background: white;
             border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
         
         .email-header {
@@ -63,7 +64,7 @@
         }
         
         .content {
-            padding: 40px 30px;
+            padding: 30px 20px;
         }
         
         .greeting {
@@ -232,12 +233,11 @@
         }
         
         .footer {
-            background: #f9fafb;
-            padding: 20px;
+            background: #1f2937;
+            padding: 30px 20px;
             text-align: center;
-            border-top: 1px solid #eee;
+            color: #9ca3af;
             font-size: 12px;
-            color: #999;
         }
         
         .footer-text {
@@ -379,14 +379,16 @@
                 {% for item in order.orderitem_set.all %}
                 <div class="product-item">
                     <div class="product-image">
-                        {% if item.product.image %}
+                        {% if item.product_image %}
+                            <img src="{{ item.product_image }}" alt="{{ item.product_name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">
+                        {% elif item.product and item.product.image %}
                             <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">
                         {% else %}
-                            👕
+                            📦
                         {% endif %}
                     </div>
                     <div class="product-info">
-                        <div class="product-name">{{ item.product.name }}</div>
+                        <div class="product-name">{{ item.product_name|default:item.product.name }}</div>
                         <div class="product-meta">
                             {% if item.size %}<span>Size: {{ item.size }}</span>{% endif %}
                             {% if item.color %}<span> | Color: {{ item.color }}</span>{% endif %}
