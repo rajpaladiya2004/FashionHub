@@ -775,14 +775,19 @@ class ReturnRequest(models.Model):
     STATUS_CHOICES = [
         ('REQUESTED', 'Requested'),
         ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
         ('PICKUP_SCHEDULED', 'Pickup Scheduled'),
         ('RECEIVED', 'Received'),
-        ('QC_PASSED', 'QC Passed'),
-        ('QC_FAILED', 'QC Failed'),
+        ('UNABLE_TO_REACH', 'Unable to Reach'),
+        ('RESCHEDULED', 'Rescheduled'),
+        ('QC_PENDING', 'Waiting for Product Review'),
+        ('REFUND_PENDING', 'Waiting for Refunded'),
+        ('WRONG_RETURN', 'Wrong Return'),
         ('REFUNDED', 'Refunded'),
         ('REPLACED', 'Replaced'),
+        ('REJECTED', 'Rejected'),
         ('CANCELLED', 'Cancelled'),
+        ('QC_PASSED', 'QC Passed'),
+        ('QC_FAILED', 'QC Failed'),
     ]
 
     RETURN_REASON_CHOICES = [

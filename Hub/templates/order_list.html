@@ -94,10 +94,14 @@
                             </td>
                             <td><strong>&#8377;{{ order.total_amount }}</strong></td>
                             <td>
-                                {% if order.payment_status == 'PAID' %}
+                                {% if order.payment_method == 'COD' and order.order_status == 'DELIVERED' %}
+                                    <span class="badge bg-success">Paid (COD)</span>
+                                {% elif order.payment_status == 'PAID' %}
                                     <span class="badge bg-success">Paid</span>
                                 {% elif order.payment_status == 'PENDING' %}
                                     <span class="badge bg-warning">Pending</span>
+                                {% elif order.payment_status == 'REFUNDED' %}
+                                    <span class="badge bg-info">Refunded</span>
                                 {% else %}
                                     <span class="badge bg-danger">Failed</span>
                                 {% endif %}

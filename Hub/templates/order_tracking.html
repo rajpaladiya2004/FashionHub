@@ -487,7 +487,13 @@
                 </div>
                 <div class="info-card">
                     <div class="label">Payment Status</div>
-                    <div class="value">{{ order.get_payment_status_display }}</div>
+                    <div class="value">
+                        {% if order.payment_method == 'COD' and order.order_status == 'DELIVERED' %}
+                            Paid (COD)
+                        {% else %}
+                            {{ order.get_payment_status_display }}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 
@@ -512,7 +518,7 @@
                 </li>
 
                 <!-- Payment Confirmed -->
-                <li class="timeline-item {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' %}completed{% else %}pending{% endif %}">
+                <li class="timeline-item {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' or (order.payment_method == 'COD' and order.order_status == 'DELIVERED') %}completed{% else %}pending{% endif %}">
                     <div class="timeline-icon">
                         <i class="fas fa-credit-card"></i>
                     </div>
@@ -520,14 +526,16 @@
                         <h3 class="timeline-title">Payment Confirmed</h3>
                         <div class="timeline-date">
                             <i class="far fa-calendar-alt"></i>
-                            {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' %}
+                            {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' or (order.payment_method == 'COD' and order.order_status == 'DELIVERED') %}
                                 {{ order.updated_at|date:"d M, Y - h:i A" }}
                             {% else %}
                                 Awaiting confirmation
                             {% endif %}
                         </div>
                         <p class="timeline-description">
-                            {% if order.payment_method == 'COD' %}
+                            {% if order.payment_method == 'COD' and order.order_status == 'DELIVERED' %}
+                                Cash on Delivery - Payment collected at delivery.
+                            {% elif order.payment_method == 'COD' %}
                                 Cash on Delivery - Payment will be collected at the time of delivery.
                             {% elif order.payment_status == 'PAID' %}
                                 Payment received successfully via {{ order.get_payment_method_display }}.
@@ -535,8 +543,8 @@
                                 Waiting for payment confirmation.
                             {% endif %}
                         </p>
-                        <span class="status-badge {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' %}completed{% else %}pending{% endif %}">
-                            {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' %}Completed{% else %}Pending{% endif %}
+                        <span class="status-badge {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' or (order.payment_method == 'COD' and order.order_status == 'DELIVERED') %}completed{% else %}pending{% endif %}">
+                            {% if order.payment_status == 'PAID' or order.payment_status == 'PENDING' or (order.payment_method == 'COD' and order.order_status == 'DELIVERED') %}Completed{% else %}Pending{% endif %}
                         </span>
                     </div>
                 </li>

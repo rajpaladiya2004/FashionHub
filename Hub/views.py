@@ -39,11 +39,16 @@ NON_RETURNABLE_CATEGORIES = set()
 
 RETURN_STATUS_FLOW = {
     'REQUESTED': ['APPROVED', 'REJECTED', 'CANCELLED'],
-    'APPROVED': ['PICKUP_SCHEDULED', 'REJECTED'],
-    'PICKUP_SCHEDULED': ['RECEIVED'],
-    'RECEIVED': ['QC_PASSED', 'QC_FAILED'],
-    'QC_PASSED': ['REFUNDED', 'REPLACED'],
-    'QC_FAILED': ['REFUNDED', 'REPLACED'],
+    'APPROVED': ['PICKUP_SCHEDULED'],
+    'PICKUP_SCHEDULED': ['RECEIVED', 'UNABLE_TO_REACH'],
+    'UNABLE_TO_REACH': ['RESCHEDULED'],
+    'RESCHEDULED': ['PICKUP_SCHEDULED'],
+    'RECEIVED': ['QC_PENDING'],
+    'QC_PENDING': ['REFUND_PENDING', 'WRONG_RETURN', 'REPLACED'],
+    'REFUND_PENDING': ['REFUNDED', 'WRONG_RETURN', 'REPLACED'],
+    'WRONG_RETURN': ['REFUNDED'],
+    'QC_PASSED': ['REFUND_PENDING', 'WRONG_RETURN', 'REFUNDED', 'REPLACED'],
+    'QC_FAILED': ['REFUND_PENDING', 'WRONG_RETURN', 'REFUNDED', 'REPLACED'],
 }
 
 from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, ReturnRequest, ReturnItem, ReturnHistory, ReturnAttachment, ReturnLabel, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction, MainPageProduct, ChatThread, ChatMessage, ChatAttachment
@@ -3120,6 +3125,7 @@ def checkout(request):
         city = request.POST.get('city')
         state = request.POST.get('state')
         postcode = request.POST.get('postcode')
+        pincode_valid = request.POST.get('pincode_valid', '')
         payment_method = request.POST.get('payment_method', 'COD')
         customer_notes = request.POST.get('customer_notes', '')
         is_resell = request.POST.get('is_resell') == 'on'
@@ -3152,6 +3158,22 @@ def checkout(request):
                 'total_price': total_price,
                 'buy_now_item': buy_now_item
             })
+
+        if (country or '').strip().lower() == 'india':
+            if not re.fullmatch(r"[0-9]{6}", postcode or ''):
+                messages.error(request, 'Please enter a valid 6-digit pincode.')
+                return render(request, 'checkout.html', {
+                    'cart_items': cart_items,
+                    'total_price': total_price,
+                    'buy_now_item': buy_now_item
+                })
+            if pincode_valid != '1' and not _validate_indian_pincode(postcode):
+                messages.error(request, 'Pincode not found. Please enter a valid pincode.')
+                return render(request, 'checkout.html', {
+                    'cart_items': cart_items,
+                    'total_price': total_price,
+                    'buy_now_item': buy_now_item
+                })
         
         # Validate resell FROM details if resell order
         if is_resell and (not from_name or not from_phone):
@@ -5504,10 +5526,13 @@ Open: {admin_return_url}
 
 def _process_refund(return_request, amount, refund_method=''):
     order = return_request.order
-    refund_method = refund_method or order.payment_method
+    refund_method = refund_method or return_request.refund_method or order.payment_method
+    refund_method = (refund_method or '').strip().upper()
+    if refund_method in {'VIBEMALL WALLET', 'VIBEMALL_WALLET', 'WALLET'}:
+        refund_method = 'WALLET'
 
     if amount is None:
-        amount = _calculate_return_refund_amount(return_request)
+        amount = return_request.refund_amount if return_request.refund_amount is not None else _calculate_return_refund_amount(return_request)
 
     try:
         amount = Decimal(str(amount))
@@ -5608,6 +5633,23 @@ def _verify_upi_with_razorpay(upi_id):
         return False, '', 'UPI ID not found'
 
     return True, name, ''
+
+
+def _validate_indian_pincode(pincode):
+    if not re.fullmatch(r"[0-9]{6}", pincode or ''):
+        return False
+
+    url = f"https://api.postalpincode.in/pincode/{pincode}"
+    request = Request(url, method='GET')
+    try:
+        with urlopen(request, timeout=8) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        result = data[0] if isinstance(data, list) and data else None
+        if not result or result.get('Status') != 'Success':
+            return False
+        return True
+    except Exception:
+        return False
 
 
 def _lookup_ifsc_details(ifsc_code):
@@ -5914,6 +5956,9 @@ def admin_returns(request):
 def admin_return_detail(request, return_id):
     """Admin return request detail and workflow"""
     return_request_obj = get_object_or_404(ReturnRequest, id=return_id)
+    customer_profile = UserProfile.objects.filter(user=return_request_obj.user).first()
+    full_refund_amount = _calculate_return_refund_amount(return_request_obj)
+    half_refund_amount = (full_refund_amount / Decimal('2')).quantize(Decimal('0.01')) if full_refund_amount else Decimal('0.00')
     allowed_next = RETURN_STATUS_FLOW.get(return_request_obj.status, [])
 
     if request.method == 'POST':
@@ -5950,6 +5995,14 @@ def admin_return_detail(request, return_id):
                     if item.product:
                         item.product.stock = F('stock') + item.quantity
                         item.product.save(update_fields=['stock'])
+        elif action == 'QC_PENDING':
+            return_request_obj.qc_checked_at = now
+        elif action == 'WRONG_RETURN':
+            fee = Decimal('20.00') if half_refund_amount > 0 else Decimal('0.00')
+            net_amount = max(half_refund_amount - fee, Decimal('0.00'))
+            return_request_obj.refund_amount = half_refund_amount
+            return_request_obj.refund_fee = fee
+            return_request_obj.refund_amount_net = net_amount
         elif action in ['REFUNDED', 'REPLACED']:
             return_request_obj.resolved_at = now
             if action == 'REFUNDED':
@@ -5982,6 +6035,8 @@ def admin_return_detail(request, return_id):
         'return_request': return_request_obj,
         'history': return_request_obj.history.select_related('changed_by'),
         'allowed_next': allowed_next,
+        'customer_profile': customer_profile,
+        'half_refund_amount': half_refund_amount,
     })
 
 
@@ -6287,15 +6342,22 @@ def download_invoice(request, order_number):
             
             if item.product_image and str(item.product_image).strip():
                 img_path_str = str(item.product_image).strip()
-                # ignore external URLs
-                if not img_path_str.startswith('http'):
-                    # use MEDIA_ROOT if configured, otherwise fallback to BASE_DIR/media
-                    media_root = getattr(settings, 'MEDIA_ROOT', None) or os.path.join(settings.BASE_DIR, 'media')
+                media_root = getattr(settings, 'MEDIA_ROOT', None) or os.path.join(settings.BASE_DIR, 'media')
+
+                if img_path_str.startswith('http://') or img_path_str.startswith('https://'):
+                    try:
+                        with urlopen(img_path_str, timeout=5) as img_response:
+                            img_bytes = img_response.read()
+                        if img_bytes:
+                            img_cell = Image(BytesIO(img_bytes), width=0.5*inch, height=0.5*inch)
+                    except Exception:
+                        img_cell = None
+                else:
                     # Normalize common prefixes: '/media/', 'media/', or leading '/'
                     if img_path_str.startswith('/media/'):
-                        img_path_str = img_path_str[len('/media/'):]
+                        img_path_str = img_path_str[len('/media/'):] 
                     elif img_path_str.startswith('media/'):
-                        img_path_str = img_path_str[len('media/'):]
+                        img_path_str = img_path_str[len('media/'):] 
                     elif img_path_str.startswith('/'):
                         img_path_str = img_path_str[1:]
                     img_path = os.path.join(media_root, img_path_str)
@@ -6303,15 +6365,20 @@ def download_invoice(request, order_number):
                         # Try to load image with PIL (with AVIF support via pillow-heif)
                         try:
                             from PIL import Image as PILImage
-                            # Open image to verify it's readable
                             with open(img_path, 'rb') as f:
                                 test_img = PILImage.open(f)
-                                test_img.load()  # Force load to catch errors
-                            # Image is readable, use it
+                                test_img.load()
                             img_cell = Image(img_path, width=0.5*inch, height=0.5*inch)
                         except Exception:
-                            # Image format not supported, show dash
                             img_cell = None
+
+            if not img_cell and item.product and getattr(item.product, 'image', None):
+                try:
+                    img_path = item.product.image.path
+                    if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+                        img_cell = Image(img_path, width=0.5*inch, height=0.5*inch)
+                except Exception:
+                    img_cell = None
             
             # Create product cell with image (if available) and name
             if img_cell:

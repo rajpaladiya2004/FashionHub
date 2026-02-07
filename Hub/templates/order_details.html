@@ -63,10 +63,14 @@
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted">Payment Status</h6>
                             <h5>
-                                {% if order.payment_status == 'PAID' %}
+                                {% if order.payment_method == 'COD' and order.order_status == 'DELIVERED' %}
+                                    <span class="badge bg-success">Paid (COD)</span>
+                                {% elif order.payment_status == 'PAID' %}
                                     <span class="badge bg-success">Paid</span>
                                 {% elif order.payment_status == 'PENDING' %}
                                     <span class="badge bg-warning">Pending</span>
+                                {% elif order.payment_status == 'REFUNDED' %}
+                                    <span class="badge bg-info">Refunded</span>
                                 {% else %}
                                     <span class="badge bg-danger">Failed</span>
                                 {% endif %}
@@ -182,7 +186,7 @@
                             </tbody>
                             <tfoot class="table-light">
                                 <tr>
-                                    <td colspan="5" class="text-end"><strong>Subtotal:</strong></td>
+                                    <td colspan="5" class="text-end"><strong>Subtotal (Incl. Tax):</strong></td>
                                     <td><strong>&#8377;{{ order.subtotal }}</strong></td>
                                 </tr>
                                 {% if order.shipping_cost %}

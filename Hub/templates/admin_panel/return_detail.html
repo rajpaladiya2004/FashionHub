@@ -92,6 +92,23 @@
                 </div>
             </div>
 
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Customer Details</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>Name:</strong> {{ return_request.user.get_full_name|default:return_request.user.username }}</p>
+                    <p class="mb-1"><strong>Email:</strong> {{ return_request.user.email|default:"-" }}</p>
+                    <p class="mb-1"><strong>Phone:</strong> {{ customer_profile.phone|default:customer_profile.mobile_number|default:"-" }}</p>
+                    <p class="mb-1"><strong>Address:</strong> {{ customer_profile.address|default:"-" }}</p>
+                    <p class="mb-1"><strong>Wallet Balance:</strong> ₹{{ customer_profile.wallet_balance|default:"0.00" }}</p>
+                    <div class="border rounded p-2 mt-2" style="background: #f8fafc;">
+                        <p class="mb-1"><strong>Shipping Address:</strong> {{ return_request.order.shipping_address|default:"-" }}</p>
+                        <p class="mb-0"><strong>Billing Address:</strong> {{ return_request.order.billing_address|default:"-" }}</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">Update Status</h5>
@@ -108,17 +125,27 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="mb-3">
+                        <div class="mb-3" id="pickupFields" style="display: none;">
                             <label class="form-label">Pickup Scheduled Date</label>
                             <input type="date" class="form-control" name="pickup_scheduled_at">
                             <small class="text-muted">Select a date (time defaults to 10:00 AM).</small>
                         </div>
-                        <div class="mb-3">
+                        <div class="mb-3" id="refundAmountFields" style="display: none;">
                             <label class="form-label">Refund Amount</label>
-                            <input type="number" step="0.01" class="form-control" name="refund_amount" placeholder="Optional">
+                            <input
+                                type="number"
+                                step="0.01"
+                                class="form-control"
+                                name="refund_amount"
+                                id="refundAmountInput"
+                                data-half-amount="{{ half_refund_amount }}"
+                                value="{{ return_request.refund_amount|default_if_none:'' }}"
+                                placeholder="Optional"
+                            >
                             <small class="text-muted">Rs.20 return fee will be deducted from this amount.</small>
+                            <small class="text-muted d-block" id="wrongReturnHint" style="display: none;">Half refund will be applied for wrong returns.</small>
                         </div>
-                        <div class="mb-3">
+                        <div class="mb-3" id="refundMethodFields" style="display: none;">
                             <label class="form-label">Refund Method</label>
                             <input type="text" class="form-control" name="refund_method" placeholder="RAZORPAY / COD / WALLET">
                         </div>
@@ -128,6 +155,38 @@
                         </div>
                         <button type="submit" class="btn btn-primary w-100">Update</button>
                     </form>
+                    <script>
+                        (function () {
+                            const actionSelect = document.querySelector('select[name="action"]');
+                            const pickupFields = document.getElementById('pickupFields');
+                            const refundAmountFields = document.getElementById('refundAmountFields');
+                            const refundMethodFields = document.getElementById('refundMethodFields');
+                            const refundAmountInput = document.getElementById('refundAmountInput');
+                            const wrongReturnHint = document.getElementById('wrongReturnHint');
+                            if (!actionSelect) return;
+
+                            const showPickup = new Set(['PICKUP_SCHEDULED']);
+                            const showRefundAmount = new Set(['REFUNDED', 'WRONG_RETURN']);
+                            const showRefundMethod = new Set(['REFUNDED']);
+
+                            const updateVisibility = () => {
+                                const action = actionSelect.value;
+                                const isWrongReturn = action === 'WRONG_RETURN';
+
+                                pickupFields.style.display = showPickup.has(action) ? 'block' : 'none';
+                                refundAmountFields.style.display = showRefundAmount.has(action) ? 'block' : 'none';
+                                refundMethodFields.style.display = showRefundMethod.has(action) ? 'block' : 'none';
+                                wrongReturnHint.style.display = isWrongReturn ? 'block' : 'none';
+
+                                if (isWrongReturn && refundAmountInput && refundAmountInput.dataset.halfAmount) {
+                                    refundAmountInput.value = refundAmountInput.dataset.halfAmount;
+                                }
+                            };
+
+                            actionSelect.addEventListener('change', updateVisibility);
+                            updateVisibility();
+                        })();
+                    </script>
                     {% else %}
                         <div class="text-muted">No further actions available.</div>
                     {% endif %}

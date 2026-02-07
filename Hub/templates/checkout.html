@@ -48,8 +48,9 @@
         {% endif %}
 
         {% if cart_items %}
-        <form action="{% url 'checkout' %}" method="POST">
+        <form action="{% url 'checkout' %}" method="POST" id="checkoutForm">
             {% csrf_token %}
+            <input type="hidden" name="pincode_valid" id="pincodeValid" value="0">
             <div class="row">
                 <div class="col-lg-6">
                     <div class="checkbox-form">
@@ -100,7 +101,8 @@
                             <div class="col-md-12">
                                 <div class="checkout-form-list mb-3">
                                     <label>Town / City <span class="required">*</span></label>
-                                    <input type="text" name="city" placeholder="Town / City" required>
+                                    <input type="text" name="city" id="cityField" placeholder="Town / City" required>
+                                    <small class="text-muted" id="cityHint"></small>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -112,7 +114,7 @@
                             <div class="col-md-6">
                                 <div class="checkout-form-list mb-3">
                                     <label>Postcode / Zip <span class="required">*</span></label>
-                                    <input type="text" name="postcode" placeholder="Postcode / Zip" required>
+                                    <input type="text" name="postcode" id="postcodeField" placeholder="Postcode / Zip" required>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -289,7 +291,7 @@
                             </div>
                             
                             <div class="order-button-payment mt-20">
-                                <button type="submit" class="tp-btn-h1">Place Order</button>
+                                <button type="submit" class="tp-btn-h1" id="placeOrderButton">Place Order</button>
                             </div>
                         </div>
                     </div>
@@ -382,6 +384,101 @@ function updateTotal(pointsRedeemed) {
     finalTotalDisplay.textContent = `₹${newTotal.toFixed(2)}`;
 }
 {% endif %}
+
+// ===== Pincode to City Auto-Detect (India) =====
+(function () {
+    const postcodeField = document.getElementById('postcodeField');
+    const cityField = document.getElementById('cityField');
+    const cityHint = document.getElementById('cityHint');
+    const countryField = document.querySelector('select[name="country"]');
+    const pincodeValidField = document.getElementById('pincodeValid');
+    const placeOrderButton = document.getElementById('placeOrderButton');
+    const checkoutForm = document.getElementById('checkoutForm');
+    if (!postcodeField || !cityField) return;
+
+    let lookupTimer = null;
+
+    const setHint = (text, isError) => {
+        if (!cityHint) return;
+        cityHint.textContent = text;
+        cityHint.style.color = isError ? '#dc3545' : '#6c757d';
+    };
+
+    const updateSubmitState = (isValid) => {
+        if (pincodeValidField) {
+            pincodeValidField.value = isValid ? '1' : '0';
+        }
+        if (placeOrderButton) {
+            placeOrderButton.disabled = !isValid && isIndia();
+            placeOrderButton.title = !isValid && isIndia() ? 'Enter a valid pincode to place the order.' : '';
+        }
+    };
+
+    const isIndia = () => {
+        return (countryField?.value || '').toLowerCase() === 'india';
+    };
+
+    const fetchCity = async (pincode) => {
+        try {
+            setHint('Detecting city...', false);
+            const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+            const data = await response.json();
+            const result = Array.isArray(data) ? data[0] : null;
+            if (!result || result.Status !== 'Success' || !result.PostOffice || !result.PostOffice.length) {
+                setHint('City not found for this pincode.', true);
+                updateSubmitState(false);
+                return;
+            }
+            const office = result.PostOffice[0];
+            if (office && office.District) {
+                cityField.value = office.District;
+                setHint(`Detected: ${office.District}`, false);
+                updateSubmitState(true);
+            } else {
+                setHint('City not found for this pincode.', true);
+                updateSubmitState(false);
+            }
+        } catch (error) {
+            setHint('Unable to detect city right now.', true);
+            updateSubmitState(false);
+        }
+    };
+
+    postcodeField.addEventListener('input', () => {
+        const value = (postcodeField.value || '').trim();
+        if (lookupTimer) clearTimeout(lookupTimer);
+        if (!/^[0-9]{6}$/.test(value)) {
+            setHint('', false);
+            updateSubmitState(false);
+            return;
+        }
+        lookupTimer = setTimeout(() => fetchCity(value), 350);
+    });
+
+    if (countryField) {
+        countryField.addEventListener('change', () => {
+            if (!isIndia()) {
+                setHint('', false);
+                updateSubmitState(true);
+            } else if (/^[0-9]{6}$/.test((postcodeField.value || '').trim())) {
+                updateSubmitState(pincodeValidField?.value === '1');
+            } else {
+                updateSubmitState(false);
+            }
+        });
+    }
+
+    if (checkoutForm) {
+        checkoutForm.addEventListener('submit', (event) => {
+            if (isIndia() && pincodeValidField?.value !== '1') {
+                event.preventDefault();
+                setHint('Please enter a valid pincode before submitting.', true);
+            }
+        });
+    }
+
+    updateSubmitState(isIndia() ? false : true);
+})();
 </script>
 
 {% endblock content %}
