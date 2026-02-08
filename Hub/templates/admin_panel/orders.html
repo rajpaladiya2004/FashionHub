@@ -516,27 +516,51 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if item.order.order_status == 'PENDING' %}
-                                    <span class="badge bg-warning">
-                                        <i class='bx bx-time-five'></i> {{ item.order.get_order_status_display }}
-                                    </span>
-                                    {% elif item.order.order_status == 'PROCESSING' %}
-                                    <span class="badge bg-info">
-                                        <i class='bx bx-package'></i> {{ item.order.get_order_status_display }}
-                                    </span>
-                                    {% elif item.order.order_status == 'SHIPPED' %}
-                                    <span class="badge bg-secondary">
-                                        <i class='bx bx-car'></i> {{ item.order.get_order_status_display }}
-                                    </span>
-                                    {% elif item.order.order_status == 'DELIVERED' %}
-                                    <span class="badge bg-success">
-                                        <i class='bx bx-check-circle'></i> {{ item.order.get_order_status_display }}
-                                    </span>
-                                    {% elif item.order.order_status == 'CANCELLED' %}
-                                    <span class="badge bg-danger">
-                                        <i class='bx bx-x-circle'></i> {{ item.order.get_order_status_display }}
-                                    </span>
-                                    {% endif %}
+                                    {% with latest_return=item.order.return_requests.first %}
+                                        {% if latest_return %}
+                                        <span class="badge
+                                            {% if latest_return.status == 'REQUESTED' %}bg-warning
+                                            {% elif latest_return.status == 'APPROVED' %}bg-info
+                                            {% elif latest_return.status == 'PICKUP_SCHEDULED' %}bg-primary
+                                            {% elif latest_return.status == 'RECEIVED' %}bg-info
+                                            {% elif latest_return.status == 'UNABLE_TO_REACH' %}bg-danger
+                                            {% elif latest_return.status == 'RESCHEDULED' %}bg-warning
+                                            {% elif latest_return.status == 'QC_PENDING' %}bg-warning
+                                            {% elif latest_return.status == 'QC_PASSED' %}bg-success
+                                            {% elif latest_return.status == 'QC_FAILED' %}bg-danger
+                                            {% elif latest_return.status == 'REFUND_PENDING' %}bg-info
+                                            {% elif latest_return.status == 'WRONG_RETURN' %}bg-danger
+                                            {% elif latest_return.status == 'REFUNDED' %}bg-success
+                                            {% elif latest_return.status == 'REPLACED' %}bg-success
+                                            {% elif latest_return.status == 'REJECTED' %}bg-danger
+                                            {% elif latest_return.status == 'CANCELLED' %}bg-secondary
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ latest_return.get_status_display }}
+                                        </span>
+                                        {% else %}
+                                            {% if item.order.order_status == 'PENDING' %}
+                                            <span class="badge bg-warning">
+                                                <i class='bx bx-time-five'></i> {{ item.order.get_order_status_display }}
+                                            </span>
+                                            {% elif item.order.order_status == 'PROCESSING' %}
+                                            <span class="badge bg-info">
+                                                <i class='bx bx-package'></i> {{ item.order.get_order_status_display }}
+                                            </span>
+                                            {% elif item.order.order_status == 'SHIPPED' %}
+                                            <span class="badge bg-secondary">
+                                                <i class='bx bx-car'></i> {{ item.order.get_order_status_display }}
+                                            </span>
+                                            {% elif item.order.order_status == 'DELIVERED' %}
+                                            <span class="badge bg-success">
+                                                <i class='bx bx-check-circle'></i> {{ item.order.get_order_status_display }}
+                                            </span>
+                                            {% elif item.order.order_status == 'CANCELLED' %}
+                                            <span class="badge bg-danger">
+                                                <i class='bx bx-x-circle'></i> {{ item.order.get_order_status_display }}
+                                            </span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endwith %}
                                 </td>
                                 <td>
                                     {% if item.order.payment_status == 'PAID' %}

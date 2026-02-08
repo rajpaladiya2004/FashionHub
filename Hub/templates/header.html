@@ -12,10 +12,9 @@
                         <div class="header-inner-end text-md-end">
                             <div class="ovic-menu-wrapper">
                                 <ul>
-                                    <li><a href="{% url 'about' %}">About Us</a></li>
-                                    <li><a href="{% url 'contact' %}">Order Tracking</a></li>
-                                    <li><a href="{% url 'contact' %}">Contact Us</a></li>
-                                    <li><a href="{% url 'faq' %}">FAQs</a></li>
+                                    {% for link in header_links %}
+                                        <li><a href="{% url link.url_name %}">{{ link.label }}</a></li>
+                                    {% endfor %}
                                     {% if user.is_authenticated %}
                                         <li><a href="{% url 'logout' %}">Logout</a></li>
                                         {% endif %}
@@ -62,18 +61,10 @@
                                 </div>
                                 <div class="header__search-cat">
                                     <select>
-                                        <option>All Categories</option>
-                                        <option>Best Seller Products</option>
-                                        <option>Top 10 Offers</option>
-                                        <option>New Arrivals</option>
-                                        <option>Phones &amp; Tablets</option>
-                                        <option>Electronics &amp; Digital</option>
-                                        <option>Fashion &amp; Clothings</option>
-                                        <option>Jewelry &amp; Watches</option>
-                                        <option>Health &amp; Beauty</option>
-                                        <option>Sound &amp; Speakers</option>
-                                        <option>TV &amp; Audio</option>
-                                        <option>Computers</option>
+                                        <option value="">All Categories</option>
+                                        {% for category in header_categories %}
+                                            <option value="{{ category.key }}">{{ category.label }}</option>
+                                        {% endfor %}
                                     </select>
                                 </div>
                             </form>
@@ -145,184 +136,21 @@
                                 <nav id="mobile-menu" style="display: block;">
                                     <ul>
                                         <li>
-                                            <a href="{% url 'shop' %}">All Categories <i class="far fa-angle-down"></i></a>
-                                            <ul class="mega-menu">
-                                                <li><a href="{% url 'shop' %}">Shop Pages</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Standard SHop Page</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop Right Sidebar</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop Left Sidebar</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop 3 Column</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop 4 Column</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Product Pages</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Product Details</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Product V2</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Product V3</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Varriable Product</a></li>
-                                                        <li><a href="{% url 'product-details' %}">External Product</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Other Pages</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">wishlist</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shopping Cart</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Checkout</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Login</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Register</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                    </ul>
-                                                </li>
-                                            </ul>
+                                            <a href="{% url 'shop' %}">All Categories</a>
                                         </li>
+                                        {% for category in header_categories %}
                                         <li>
-                                            <a href="{% url 'shop' %}">Phone and Electronics <i class="far fa-angle-down"></i></a>
-                                            <ul class="mega-menu mega-menu-2">
-                                                <li><a href="{% url 'shop' %}">Shop Pages</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Standard SHop Page</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop Right Sidebar</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop Left Sidebar</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop 3 Column</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shop 4 Column</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Product Pages</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Product Details</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Product V2</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Product V3</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Varriable Product</a></li>
-                                                        <li><a href="{% url 'product-details' %}">External Product</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Other Pages</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">wishlist</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Shopping Cart</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Checkout</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Login</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Register</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                    <ul class="mega-item">
-                                                        <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                        <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                    </ul>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                        <li>
-                                            <a href="{% url 'shop' %}">Best Seller Products
-                                                <span class="cat-label">hot!</span>
-                                                <i class="far fa-angle-down"></i>
-                                            </a>
-                                            <ul class="mega-menu">
-                                                <li><a href="{% url 'shop' %}">Shop Pages</a>
-                                                     <ul class="mega-item">
-                                                         <li><a href="{% url 'product-details' %}">Standard SHop Page</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Shop Right Sidebar</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Shop Left Sidebar</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Shop 3 Column</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Shop 4 Column</a></li>
-                                                     </ul>
-                                                 </li>
-                                                 <li><a href="{% url 'shop' %}">Product Pages</a>
-                                                     <ul class="mega-item">
-                                                         <li><a href="{% url 'product-details' %}">Product Details</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Product V2</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Product V3</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Varriable Product</a></li>
-                                                         <li><a href="{% url 'product-details' %}">External Product</a></li>
-                                                     </ul>
-                                                 </li>
-                                                 <li><a href="{% url 'shop' %}">Other Pages</a>
-                                                     <ul class="mega-item">
-                                                         <li><a href="{% url 'product-details' %}">wishlist</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Shopping Cart</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Checkout</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Login</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Register</a></li>
-                                                     </ul>
-                                                 </li>
-                                                 <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                     <ul class="mega-item">
-                                                         <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                     </ul>
-                                                 </li>
-                                                 <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                     <ul class="mega-item">
-                                                         <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                     </ul>
-                                                 </li>
-                                                 <li><a href="{% url 'shop' %}">Phone &amp; Tablets</a>
-                                                     <ul class="mega-item">
-                                                         <li><a href="{% url 'product-details' %}">Catagory 1</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Catagory 2</a></li>
-                                                         <li><a href="{% url 'product-details' %}">Catagory 3</a></li>
-                                                     </ul>
-                                                 </li>
-                                            </ul>
-                                        </li>
-                                        <li>
-                                            <a href="{% url 'shop' %}">Top 10 Offers
-                                                <span class="cat-label green">new!</span>
+                                            <a href="{% url 'shop' %}?category={{ category.key }}">
+                                                {{ category.label }}
+                                                {% if category.badge_text %}
+                                                    <span class="cat-label{% if category.badge_class %} {{ category.badge_class }}{% endif %}">{{ category.badge_text|lower }}</span>
+                                                {% endif %}
+                                                {% if category.has_children %}
+                                                    <i class="far fa-angle-down"></i>
+                                                {% endif %}
                                             </a>
                                         </li>
-                                        <li>
-                                            <a href="{% url 'shop' %}">New Arrivals <i class="far fa-angle-down"></i></a>
-                                            <ul class="submenu">
-                                                <li><a href="{% url 'shop' %}">Home Appliances</a></li>
-                                                <li><a href="{% url 'shop' %}">Technology</a>
-                                                    <ul class="submenu">
-                                                        <li><a href="{% url 'shop' %}">Storage Devices</a></li>
-                                                        <li><a href="{% url 'shop' %}">Monitors</a></li>
-                                                        <li><a href="{% url 'shop' %}">Laptops</a></li>
-                                                    </ul>
-                                                </li>
-                                                <li><a href="{% url 'shop' %}">Office Equipments</a></li>
-                                            </ul>
-                                        </li>
-                                        <li><a href="{% url 'shop' %}">TV &amp; Audio</a></li>
-                                        <li><a href="{% url 'shop' %}">Electronics &amp; Digital</a></li>
-                                        <li class="d-laptop-none"><a href="{% url 'shop' %}">Fashion &amp; Clothings</a></li>
-                                        <li class="d-laptop-none"><a href="{% url 'shop' %}">Jewelry &amp; Watches</a></li>
-                                        <li><a href="{% url 'shop' %}">Health &amp; Beauty</a></li>
+                                        {% endfor %}
                                     </ul>
                                 </nav>
                             </div>

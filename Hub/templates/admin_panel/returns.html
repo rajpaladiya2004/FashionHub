@@ -47,7 +47,7 @@
                         <td>#{{ ret.id }}</td>
                         <td>{{ ret.order.order_number }}</td>
                         <td>{{ ret.user.username }}</td>
-                        <td><span class="badge bg-label-warning">{{ ret.status|title }}</span></td>
+                        <td><span class="badge bg-label-warning">{{ ret.get_status_display }}</span></td>
                         <td>{{ ret.requested_at|date:"d M Y" }}</td>
                         <td>{% if ret.refund_amount %}&#8377;{{ ret.refund_amount }}{% else %}-{% endif %}</td>
                         <td>

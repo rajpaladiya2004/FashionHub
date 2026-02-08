@@ -19,7 +19,7 @@
                             <small>Order #{{ return_request.order.order_number }}</small>
                         </div>
                         <div>
-                            <span class="badge bg-warning text-dark">{{ return_request.status|title }}</span>
+                            <span class="badge bg-warning text-dark">{{ return_request.get_status_display }}</span>
                         </div>
                     </div>
                 </div>
@@ -54,7 +54,7 @@
                         <ul class="list-group">
                             {% for entry in history %}
                             <li class="list-group-item d-flex justify-content-between flex-wrap gap-2">
-                                <span>{{ entry.new_status|title }}</span>
+                                <span>{% if entry.new_status == 'APPROVED' %}R-Approved{% else %}{{ entry.new_status|title }}{% endif %}</span>
                                 <small class="text-muted">{{ entry.created_at|date:"d M Y, h:i A" }}</small>
                             </li>
                             {% empty %}

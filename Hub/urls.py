@@ -85,6 +85,7 @@ urlpatterns = [
     # Buy Now & Checkout URLs
     path('buy-now/<int:product_id>/', views.buy_now, name='buy_now'),
     path('checkout/', views.checkout, name='checkout'),
+    path('checkout/confirm/', views.checkout_confirm, name='checkout_confirm'),
     path('order-confirmation/<int:order_id>/', views.order_confirmation, name='order_confirmation'),
     path('razorpay-payment/<int:order_id>/', views.razorpay_payment, name='razorpay_payment'),
     path('razorpay-payment-success/', views.razorpay_payment_success, name='razorpay_payment_success'),

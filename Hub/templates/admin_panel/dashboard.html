@@ -432,26 +432,20 @@
         <div class="card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Expenses</h6>
-                    <span class="badge bg-label-secondary">{% now "Y" %}</span>
+                    <h6 class="mb-0">Yearly Summary</h6>
+                    <div class="d-flex align-items-center gap-2">
+                        <select id="yearlyMetricSelect" class="form-select form-select-sm" style="width: 150px;">
+                            <option value="total_sales" selected>Total Sale</option>
+                            <option value="profit">Profit</option>
+                        </select>
+                        <span class="badge bg-label-secondary">{% now "Y" %}</span>
+                    </div>
                 </div>
                 <div id="expensesYearlyChart" class="chart-lg"></div>
             </div>
         </div>
     </div>
-    <div class="col-xl-4 mb-4">
-        <div class="card">
-            <div class="card-body">
-                <h6 class="mb-3">User & System Controls</h6>
-                <div class="d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-secondary btn-sm"><i class="bx bx-globe"></i> Language</button>
-                    <button class="btn btn-outline-secondary btn-sm" id="themeToggle"><i class="bx bx-moon"></i> Theme</button>
-                    <button class="btn btn-outline-secondary btn-sm"><i class="bx bx-bell"></i> Notifications</button>
-                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'profile' %}"><i class="bx bx-user"></i> Profile</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div class="col-xl-4 mb-4"></div>
 </div>
 
 <!-- Recent Orders Table (Image Layout) -->
@@ -502,18 +496,50 @@
                                 <td>
                                     <div class="fw-semibold">₹{{ order.total_amount|floatformat:0 }}</div>
                                     <small class="text-muted">
-                                        {% if order.payment_status == 'PAID' %}Fully Paid{% else %}Unpaid{% endif %}
+                                        {% if order.payment_status == 'PAID' %}
+                                            Fully Paid
+                                        {% elif order.payment_method == 'COD' and order.order_status == 'DELIVERED' %}
+                                            Fully Paid
+                                        {% elif order.payment_status == 'REFUNDED' %}
+                                            Refunded
+                                        {% else %}
+                                            Unpaid
+                                        {% endif %}
                                     </small>
                                 </td>
                                 <td>
-                                    <span class="badge 
-                                        {% if order.order_status == 'DELIVERED' %}bg-label-success
-                                        {% elif order.order_status == 'SHIPPED' %}bg-label-info
-                                        {% elif order.order_status == 'PROCESSING' %}bg-label-primary
-                                        {% elif order.order_status == 'CANCELLED' %}bg-label-danger
-                                        {% else %}bg-label-warning{% endif %}">
-                                        {{ order.order_status|title }}
-                                    </span>
+                                    {% with latest_return=order.return_requests.first %}
+                                        {% if latest_return %}
+                                        <span class="badge d-inline-flex align-items-center
+                                            {% if latest_return.status == 'REQUESTED' %}bg-label-warning
+                                            {% elif latest_return.status == 'APPROVED' %}bg-label-info
+                                            {% elif latest_return.status == 'PICKUP_SCHEDULED' %}bg-label-primary
+                                            {% elif latest_return.status == 'RECEIVED' %}bg-label-info
+                                            {% elif latest_return.status == 'UNABLE_TO_REACH' %}bg-label-danger
+                                            {% elif latest_return.status == 'RESCHEDULED' %}bg-label-warning
+                                            {% elif latest_return.status == 'QC_PENDING' %}bg-label-warning
+                                            {% elif latest_return.status == 'QC_PASSED' %}bg-label-success
+                                            {% elif latest_return.status == 'QC_FAILED' %}bg-label-danger
+                                            {% elif latest_return.status == 'REFUND_PENDING' %}bg-label-info
+                                            {% elif latest_return.status == 'WRONG_RETURN' %}bg-label-danger
+                                            {% elif latest_return.status == 'REFUNDED' %}bg-label-success
+                                            {% elif latest_return.status == 'REPLACED' %}bg-label-success
+                                            {% elif latest_return.status == 'REJECTED' %}bg-label-danger
+                                            {% elif latest_return.status == 'CANCELLED' %}bg-label-secondary
+                                            {% else %}bg-label-secondary{% endif %}">
+                                            {{ latest_return.get_status_display }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge 
+                                            {% if order.order_status == 'DELIVERED' %}bg-label-success
+                                            {% elif order.order_status == 'SHIPPED' %}bg-label-info
+                                            {% elif order.order_status == 'PROCESSING' %}bg-label-primary
+                                            {% elif order.order_status == 'CANCELLED' %}bg-label-danger
+                                            {% else %}bg-label-warning{% endif %}">
+                                            {{ order.order_status|title }}
+                                        </span>
+                                        {% endif %}
+                                    {% endwith %}
                                 </td>
                                 <td class="text-end">
                                     <div class="dropdown">
@@ -566,6 +592,7 @@
     const expenseSeries = [
         {% for val in expense_yearly_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
     ];
+    const profitYearlySeries = incomeSeries.map((val, idx) => Math.round(val - (expenseSeries[idx] || 0)));
     const visitorsSeries = [
         {% for val in visitors_weekly_series %}{{ val }}{% if not forloop.last %},{% endif %}{% endfor %}
     ];
@@ -824,28 +851,34 @@
     }
 
     // Expenses Yearly (bar)
+    const yearlySeriesConfig = {
+        total_sales: { name: 'Total Sale', data: incomeSeries, color: colors.primary },
+        profit: { name: 'Profit', data: profitYearlySeries, color: colors.success }
+    };
+
     const expensesYearlyChartEl = document.querySelector('#expensesYearlyChart');
     if (expensesYearlyChartEl) {
-        new ApexCharts(expensesYearlyChartEl, {
-            series: [{ name: 'Expenses', data: expenseSeries }],
+        const initialConfig = yearlySeriesConfig.total_sales;
+        const yearlyChart = new ApexCharts(expensesYearlyChartEl, {
+            series: [{ name: initialConfig.name, data: initialConfig.data }],
             chart: { type: 'bar', height: 320, toolbar: { show: false } },
             plotOptions: { bar: { columnWidth: '45%', borderRadius: 6 } },
-            colors: [colors.info],
+            colors: [initialConfig.color],
             dataLabels: { enabled: false },
             xaxis: { categories: monthLabels, labels: { style: { colors: colors.axis } } },
             yaxis: { labels: { style: { colors: colors.axis } } },
             grid: { borderColor: '#eceef1' }
-        }).render();
-    }
-
-    // Theme toggle (basic)
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function () {
-            const html = document.documentElement;
-            const isDark = html.getAttribute('data-theme') === 'theme-dark';
-            html.setAttribute('data-theme', isDark ? 'theme-default' : 'theme-dark');
         });
+        yearlyChart.render();
+
+        const yearlyMetricSelect = document.getElementById('yearlyMetricSelect');
+        if (yearlyMetricSelect) {
+            yearlyMetricSelect.addEventListener('change', () => {
+                const config = yearlySeriesConfig[yearlyMetricSelect.value] || yearlySeriesConfig.total_sales;
+                yearlyChart.updateOptions({ colors: [config.color] });
+                yearlyChart.updateSeries([{ name: config.name, data: config.data }]);
+            });
+        }
     }
 
     // Auto refresh dashboard every 5 minutes

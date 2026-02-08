@@ -588,7 +588,7 @@ class Order(models.Model):
     # Order Approval System
     APPROVAL_STATUS_CHOICES = [
         ('PENDING_APPROVAL', 'Pending Approval'),
-        ('APPROVED', 'Approved'),
+        ('APPROVED', 'R-Approved'),
         ('REJECTED', 'Rejected'),
         ('AUTO_APPROVED', 'Auto Approved'),
     ]

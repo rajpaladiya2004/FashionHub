@@ -663,7 +663,7 @@
                 <h2 class="products-title"><i class="fas fa-undo"></i> Return Tracking</h2>
                 <div class="product-card" style="align-items: flex-start;">
                     <div class="product-details">
-                        <div class="product-name">Current Status: {{ return_request.status|title }}</div>
+                        <div class="product-name">Current Status: {{ return_request.get_status_display }}</div>
                         {% if return_request.refund_amount %}
                         <div class="product-meta">Refund: ₹{{ return_request.refund_amount }}{% if return_request.refund_method %} via {{ return_request.refund_method }}{% endif %}</div>
                         {% endif %}
@@ -680,7 +680,7 @@
                             <i class="fas fa-history"></i>
                         </div>
                         <div class="timeline-content">
-                            <h3 class="timeline-title">{{ entry.new_status|title }}</h3>
+                            <h3 class="timeline-title">{% if entry.new_status == 'APPROVED' %}R-Approved{% else %}{{ entry.new_status|title }}{% endif %}</h3>
                             <div class="timeline-date">
                                 <i class="far fa-calendar-alt"></i>
                                 {{ entry.created_at|date:"d M, Y - h:i A" }}

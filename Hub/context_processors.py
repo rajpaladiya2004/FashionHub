@@ -2,7 +2,7 @@
 Context processors for FashioHub
 Adds cart and wishlist counts to every template
 """
-from .models import Cart, Wishlist, SiteSettings, LoyaltyPoints
+from .models import Cart, Wishlist, SiteSettings, LoyaltyPoints, CategoryIcon
 from django.db.models import F, Sum
 
 
@@ -51,4 +51,38 @@ def site_settings_context(request):
     
     return {
         'site_settings': site_settings,
+    }
+
+
+def header_menu_context(request):
+    badge_map = {
+        'TOP_DEALS': {'text': 'HOT', 'class': ''},
+        'TOP_SELLING': {'text': 'HOT', 'class': ''},
+        'TOP_FEATURED': {'text': 'HOT', 'class': ''},
+        'RECOMMENDED': {'text': 'NEW', 'class': 'green'},
+        'GENZ_TRENDS': {'text': 'NEW', 'class': 'green'},
+        'NEXT_GEN': {'text': 'NEW', 'class': 'green'},
+    }
+
+    header_categories = []
+    for icon in CategoryIcon.objects.filter(is_active=True).order_by('order', 'id'):
+        badge = badge_map.get(icon.category_key)
+        header_categories.append({
+            'label': icon.name,
+            'key': icon.category_key,
+            'badge_text': badge['text'] if badge else '',
+            'badge_class': badge['class'] if badge else '',
+            'has_children': False,
+        })
+
+    header_links = [
+        {'label': 'About Us', 'url_name': 'about'},
+        {'label': 'Order Tracking', 'url_name': 'track_order'},
+        {'label': 'Contact Us', 'url_name': 'contact'},
+        {'label': 'FAQs', 'url_name': 'faq'},
+    ]
+
+    return {
+        'header_categories': header_categories,
+        'header_links': header_links,
     }

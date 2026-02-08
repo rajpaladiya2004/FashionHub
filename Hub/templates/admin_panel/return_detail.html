@@ -7,7 +7,7 @@
 <div class="container-xxl flex-grow-1 container-p-y">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold"><span class="text-muted fw-light">Returns /</span> #{{ return_request.id }}</h4>
-        <span class="badge bg-label-warning">{{ return_request.status|title }}</span>
+        <span class="badge bg-label-warning">{{ return_request.get_status_display }}</span>
     </div>
 
     <div class="row">
@@ -50,7 +50,7 @@
                     <ul class="list-group">
                         {% for entry in history %}
                         <li class="list-group-item d-flex justify-content-between flex-wrap gap-2">
-                            <span>{{ entry.new_status|title }}</span>
+                            <span>{% if entry.new_status == 'APPROVED' %}R-Approved{% else %}{{ entry.new_status|title }}{% endif %}</span>
                             <small class="text-muted">{{ entry.created_at|date:"d M Y, h:i A" }}</small>
                         </li>
                         {% empty %}
@@ -121,7 +121,7 @@
                             <label class="form-label">Next Status</label>
                             <select class="form-select" name="action" required>
                                 {% for status in allowed_next %}
-                                    <option value="{{ status }}">{{ status|title }}</option>
+                                    <option value="{{ status }}">{% if status == 'APPROVED' %}R-Approved{% else %}{{ status|title }}{% endif %}</option>
                                 {% endfor %}
                             </select>
                         </div>

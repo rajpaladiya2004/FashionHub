@@ -391,17 +391,41 @@
                 {% endif %}
               </td>
               <td>
-                {% if invoice.order_status == 'DELIVERED' %}
-                  <span class="badge-soft badge-soft-success">Delivered</span>
-                {% elif invoice.order_status == 'SHIPPED' %}
-                  <span class="badge-soft badge-soft-info">Shipped</span>
-                {% elif invoice.order_status == 'PROCESSING' %}
-                  <span class="badge-soft badge-soft-warning">Processing</span>
-                {% elif invoice.order_status == 'PENDING' %}
-                  <span class="badge-soft badge-soft-warning">Pending</span>
-                {% else %}
-                  <span class="badge-soft badge-soft-danger">Cancelled</span>
-                {% endif %}
+                {% with latest_return=invoice.return_requests.first %}
+                  {% if latest_return %}
+                    <span class="badge-soft
+                      {% if latest_return.status == 'REQUESTED' %} badge-soft-warning
+                      {% elif latest_return.status == 'APPROVED' %} badge-soft-info
+                      {% elif latest_return.status == 'PICKUP_SCHEDULED' %} badge-soft-info
+                      {% elif latest_return.status == 'RECEIVED' %} badge-soft-info
+                      {% elif latest_return.status == 'UNABLE_TO_REACH' %} badge-soft-danger
+                      {% elif latest_return.status == 'RESCHEDULED' %} badge-soft-warning
+                      {% elif latest_return.status == 'QC_PENDING' %} badge-soft-warning
+                      {% elif latest_return.status == 'QC_PASSED' %} badge-soft-success
+                      {% elif latest_return.status == 'QC_FAILED' %} badge-soft-danger
+                      {% elif latest_return.status == 'REFUND_PENDING' %} badge-soft-info
+                      {% elif latest_return.status == 'WRONG_RETURN' %} badge-soft-danger
+                      {% elif latest_return.status == 'REFUNDED' %} badge-soft-success
+                      {% elif latest_return.status == 'REPLACED' %} badge-soft-success
+                      {% elif latest_return.status == 'REJECTED' %} badge-soft-danger
+                      {% elif latest_return.status == 'CANCELLED' %} badge-soft-warning
+                      {% else %} badge-soft-info{% endif %}">
+                      {{ latest_return.get_status_display }}
+                    </span>
+                  {% else %}
+                    {% if invoice.order_status == 'DELIVERED' %}
+                      <span class="badge-soft badge-soft-success">Delivered</span>
+                    {% elif invoice.order_status == 'SHIPPED' %}
+                      <span class="badge-soft badge-soft-info">Shipped</span>
+                    {% elif invoice.order_status == 'PROCESSING' %}
+                      <span class="badge-soft badge-soft-warning">Processing</span>
+                    {% elif invoice.order_status == 'PENDING' %}
+                      <span class="badge-soft badge-soft-warning">Pending</span>
+                    {% else %}
+                      <span class="badge-soft badge-soft-danger">Cancelled</span>
+                    {% endif %}
+                  {% endif %}
+                {% endwith %}
               </td>
               <td class="text-end">
                 <div class="btn-group btn-group-sm" role="group">

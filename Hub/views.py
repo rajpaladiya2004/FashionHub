@@ -51,7 +51,7 @@ RETURN_STATUS_FLOW = {
     'QC_FAILED': ['REFUND_PENDING', 'WRONG_RETURN', 'REFUNDED', 'REPLACED'],
 }
 
-from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, ReturnRequest, ReturnItem, ReturnHistory, ReturnAttachment, ReturnLabel, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction, MainPageProduct, ChatThread, ChatMessage, ChatAttachment
+from .models import CategoryIcon, Slider, Feature, Banner, Product, DealCountdown, UserProfile, Address, Cart, Wishlist, ProductImage, ProductReview, ReviewImage, ReviewVote, ProductQuestion, Order, OrderItem, OrderStatusHistory, ReturnRequest, ReturnItem, ReturnHistory, ReturnAttachment, ReturnLabel, AdminEmailSettings, ProductStockNotification, BrandPartner, SiteSettings, LoyaltyPoints, PointsTransaction, MainPageProduct, ChatThread, ChatMessage, ChatAttachment
 from .email_utils import send_order_confirmation_email, send_order_status_update_email, send_admin_order_notification
 
 # ===== ADMIN PANEL VIEWS =====
@@ -3088,30 +3088,7 @@ def buy_now(request, product_id):
 @login_required(login_url='login')
 def checkout(request):
     """Dynamic Checkout Page"""
-    # Get cart items OR buy_now item
-    cart_items = []
-    buy_now_item = None
-    total_price = 0
-    
-    # Check if there's a buy_now item in session
-    if 'buy_now_item' in request.session:
-        buy_now_data = request.session['buy_now_item']
-        try:
-            product = Product.objects.get(id=buy_now_data['product_id'])
-            buy_now_item = {
-                'product': product,
-                'quantity': buy_now_data['quantity'],
-                'price': float(buy_now_data['price']),
-                'subtotal': float(buy_now_data['price']) * buy_now_data['quantity']
-            }
-            total_price = buy_now_item['subtotal']
-            cart_items = [buy_now_item]
-        except Product.DoesNotExist:
-            del request.session['buy_now_item']
-    else:
-        # Get items from cart
-        cart_items = Cart.objects.filter(user=request.user).select_related('product')
-        total_price = sum(item.get_total_price() for item in cart_items)
+    cart_items, buy_now_item, total_price = _get_checkout_items(request)
     
     # Handle form submission
     if request.method == 'POST':
@@ -3129,6 +3106,8 @@ def checkout(request):
         payment_method = request.POST.get('payment_method', 'COD')
         customer_notes = request.POST.get('customer_notes', '')
         is_resell = request.POST.get('is_resell') == 'on'
+        use_default_address = request.POST.get('use_default_address') == 'on'
+        set_default_address = request.POST.get('set_default_address') == 'on'
         
         # Loyalty points redemption
         redeem_points = request.POST.get('redeem_points') == 'on'
@@ -3149,6 +3128,23 @@ def checkout(request):
         # Resell FROM details
         from_name = request.POST.get('from_name', '')
         from_phone = request.POST.get('from_phone', '')
+
+        if use_default_address:
+            default_address = Address.objects.filter(user=request.user, is_default=True).first()
+            if not default_address:
+                messages.error(request, 'Default address not found. Please enter address manually.')
+                return render(request, 'checkout.html', {
+                    'cart_items': cart_items,
+                    'total_price': total_price,
+                    'buy_now_item': buy_now_item
+                })
+            first_name, last_name = _split_full_name(default_address.full_name)
+            phone = default_address.mobile_number
+            address = default_address.address_line1
+            city = default_address.city
+            state = default_address.state
+            postcode = default_address.pincode
+            country = default_address.country
         
         # Validation
         if not all([first_name, last_name, email, phone, address, city, state, postcode]):
@@ -3183,151 +3179,33 @@ def checkout(request):
                 'total_price': total_price,
                 'buy_now_item': buy_now_item
             })
-        
-        # Create order
-        try:
-            # Calculate totals
-            subtotal = Decimal(str(total_price))
-            tax = subtotal * Decimal('0.05')  # 5% tax
-            shipping_cost = Decimal('0.00') if subtotal > 500 else Decimal('50.00')  # Free shipping above 500
-            
-            # Apply loyalty points discount (1 point = ₹0.03)
-            points_discount = Decimal('0')
-            if redeem_points and points_to_redeem > 0:
-                # Verify user has enough points
-                loyalty_account = LoyaltyPoints.objects.get(user=request.user)
-                if points_to_redeem <= loyalty_account.points_available:
-                    points_discount = Decimal(str(points_to_redeem)) * Decimal('0.03')
-                else:
-                    messages.error(request, 'Insufficient loyalty points')
-                    return render(request, 'checkout.html', {
-                        'cart_items': cart_items,
-                        'total_price': total_price,
-                        'buy_now_item': buy_now_item
-                    })
-            
-            total_amount = subtotal + tax + shipping_cost - points_discount
-            
-            # Ensure total doesn't go negative
-            if total_amount < 0:
-                total_amount = Decimal('0')
-            
-            # Create shipping address
-            shipping_address = f"{first_name} {last_name}\n{address}\n{city}, {state} {postcode}\n{country}"
-            
-            # Create order
-            order = Order.objects.create(
-                user=request.user,
-                subtotal=subtotal,
-                tax=tax,
-                shipping_cost=shipping_cost,
-                total_amount=total_amount,
-                shipping_address=shipping_address,
-                billing_address=shipping_address,
-                payment_method=payment_method,
-                customer_notes=customer_notes,
-                is_resell=is_resell,
-                resell_from_name=from_name if is_resell else '',
-                resell_from_phone=from_phone if is_resell else ''
-            )
-            
-            # Store points redemption info for later
-            if redeem_points and points_to_redeem > 0:
-                order.admin_notes += f"\nLoyalty Points Redeemed: {points_to_redeem} points (₹{points_discount} discount)"
-                order.save()
-            
-            # Add order items
-            if buy_now_item:
-                # From buy_now
-                product = buy_now_item['product']
-                # Build absolute image URL
-                product_image = ''
-                if product.image:
-                    image_url = product.image.url
-                    if not image_url.startswith('http'):
-                        site_url = request.build_absolute_uri('/').rstrip('/')
-                        product_image = f"{site_url}{image_url}"
-                    else:
-                        product_image = image_url
-                
-                OrderItem.objects.create(
-                    order=order,
-                    product=product,
-                    product_name=product.name,
-                    product_price=buy_now_item['price'],
-                    product_image=product_image,
-                    quantity=buy_now_item['quantity']
-                )
-                # Clear buy_now from session
-                del request.session['buy_now_item']
-            else:
-                # From cart
-                for item in cart_items:
-                    # Build absolute image URL
-                    product_image = ''
-                    if item.product.image:
-                        image_url = item.product.image.url
-                        if not image_url.startswith('http'):
-                            site_url = request.build_absolute_uri('/').rstrip('/')
-                            product_image = f"{site_url}{image_url}"
-                        else:
-                            product_image = image_url
-                    
-                    OrderItem.objects.create(
-                        order=order,
-                        product=item.product,
-                        product_name=item.product.name,
-                        product_price=item.product.price,
-                        product_image=product_image,
-                        quantity=item.quantity
-                    )
-            
-            # Redeem loyalty points if applicable
-            if redeem_points and points_to_redeem > 0:
-                loyalty_account = LoyaltyPoints.objects.get(user=request.user)
-                loyalty_account.redeem_points(points_to_redeem, f"Order #{order.order_number} - ₹{points_discount} discount")
-            
-            # Handle payment
-            if payment_method == 'RAZORPAY':
-                # Redirect to payment gateway
-                return redirect('razorpay_payment', order_id=order.id)
-            else:
-                # COD - Mark as pending
-                order.payment_status = 'PENDING'
-                order.order_status = 'PENDING'
-                order.save()
-                
-                # Auto-process approval (fraud detection & auto-approve)
-                order.auto_process_approval()
-                
-                # Clear cart after successful order
-                if not buy_now_item:
-                    Cart.objects.filter(user=request.user).delete()
-                
-                # Send order confirmation email to customer
-                send_order_confirmation_email(order)
-                
-                # Send notification email to admin
-                send_admin_order_notification(order, request)
-                
-                # Check if order needs approval
-                if order.approval_status == 'PENDING_APPROVAL':
-                    messages.warning(request, f'Order placed successfully! Order #: {order.order_number}. Your order is pending approval due to security checks.')
-                else:
-                    messages.success(request, f'Order placed successfully! Order #: {order.order_number}')
-                
-                return redirect('order_confirmation', order_id=order.id)
-                
-        except Exception as e:
-            messages.error(request, f'Error creating order: {str(e)}')
-            return render(request, 'checkout.html', {
-                'cart_items': cart_items,
-                'total_price': total_price,
-                'buy_now_item': buy_now_item
-            })
+
+        request.session['checkout_form'] = {
+            'first_name': first_name,
+            'last_name': last_name,
+            'email': email,
+            'phone': phone,
+            'country': country,
+            'address': address,
+            'city': city,
+            'state': state,
+            'postcode': postcode,
+            'payment_method': payment_method,
+            'customer_notes': customer_notes,
+            'is_resell': is_resell,
+            'from_name': from_name,
+            'from_phone': from_phone,
+            'redeem_points': redeem_points,
+            'points_to_redeem': points_to_redeem,
+            'use_default_address': use_default_address,
+            'set_default_address': set_default_address,
+        }
+        return redirect('checkout_confirm')
     
     # GET request - Show checkout form
     user_profile = UserProfile.objects.filter(user=request.user).first()
+    default_address = Address.objects.filter(user=request.user, is_default=True).first()
+    checkout_form = request.session.get('checkout_form', {})
     
     # Get loyalty account
     loyalty_account = None
@@ -3342,6 +3220,8 @@ def checkout(request):
         'total_price': total_price,
         'buy_now_item': buy_now_item,
         'user_profile': user_profile,
+        'default_address': default_address,
+        'checkout_form': checkout_form,
         'loyalty_account': loyalty_account,
         'tax_amount': Decimal(str(total_price)) * Decimal('0.05'),
         'shipping_cost': Decimal('0.00') if Decimal(str(total_price)) > 500 else Decimal('50.00'),
@@ -3349,6 +3229,188 @@ def checkout(request):
     }
     
     return render(request, 'checkout.html', context)
+
+
+@login_required(login_url='login')
+def checkout_confirm(request):
+    checkout_form = request.session.get('checkout_form')
+    if not checkout_form:
+        return redirect('checkout')
+
+    cart_items, buy_now_item, total_price = _get_checkout_items(request)
+    if not cart_items:
+        messages.error(request, 'Your cart is empty.')
+        return redirect('cart')
+
+    subtotal = Decimal(str(total_price))
+    tax = subtotal * Decimal('0.05')
+    shipping_cost = Decimal('0.00') if subtotal > 500 else Decimal('50.00')
+
+    points_discount = Decimal('0')
+    points_to_redeem = int(checkout_form.get('points_to_redeem') or 0)
+    redeem_points = checkout_form.get('redeem_points') is True
+    if redeem_points and points_to_redeem > 0:
+        try:
+            loyalty_account = LoyaltyPoints.objects.get(user=request.user)
+            if points_to_redeem <= loyalty_account.points_available:
+                points_discount = Decimal(str(points_to_redeem)) * Decimal('0.03')
+        except LoyaltyPoints.DoesNotExist:
+            redeem_points = False
+
+    total_amount = subtotal + tax + shipping_cost - points_discount
+    if total_amount < 0:
+        total_amount = Decimal('0')
+
+    if request.method == 'POST':
+        first_name = checkout_form.get('first_name')
+        last_name = checkout_form.get('last_name')
+        email = checkout_form.get('email')
+        phone = checkout_form.get('phone')
+        country = checkout_form.get('country')
+        address = checkout_form.get('address')
+        city = checkout_form.get('city')
+        state = checkout_form.get('state')
+        postcode = checkout_form.get('postcode')
+        payment_method = checkout_form.get('payment_method', 'COD')
+        customer_notes = checkout_form.get('customer_notes', '')
+        is_resell = checkout_form.get('is_resell') is True
+        from_name = checkout_form.get('from_name', '')
+        from_phone = checkout_form.get('from_phone', '')
+        set_default_address = checkout_form.get('set_default_address') is True
+
+        if not all([first_name, last_name, email, phone, address, city, state, postcode]):
+            messages.error(request, 'Please fill all required fields')
+            return redirect('checkout')
+
+        if (country or '').strip().lower() == 'india':
+            if not re.fullmatch(r"[0-9]{6}", postcode or ''):
+                messages.error(request, 'Please enter a valid 6-digit pincode.')
+                return redirect('checkout')
+            if not _validate_indian_pincode(postcode):
+                messages.error(request, 'Pincode not found. Please enter a valid pincode.')
+                return redirect('checkout')
+
+        try:
+            shipping_address = f"{first_name} {last_name}\n{address}\n{city}, {state} {postcode}\n{country}"
+
+            order = Order.objects.create(
+                user=request.user,
+                subtotal=subtotal,
+                tax=tax,
+                shipping_cost=shipping_cost,
+                total_amount=total_amount,
+                shipping_address=shipping_address,
+                billing_address=shipping_address,
+                payment_method=payment_method,
+                customer_notes=customer_notes,
+                is_resell=is_resell,
+                resell_from_name=from_name if is_resell else '',
+                resell_from_phone=from_phone if is_resell else ''
+            )
+
+            if redeem_points and points_to_redeem > 0:
+                order.admin_notes += f"\nLoyalty Points Redeemed: {points_to_redeem} points (₹{points_discount} discount)"
+                order.save()
+
+            if buy_now_item:
+                product = buy_now_item['product']
+                product_image = ''
+                if product.image:
+                    image_url = product.image.url
+                    if not image_url.startswith('http'):
+                        site_url = request.build_absolute_uri('/').rstrip('/')
+                        product_image = f"{site_url}{image_url}"
+                    else:
+                        product_image = image_url
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    product_name=product.name,
+                    product_price=buy_now_item['price'],
+                    product_image=product_image,
+                    quantity=buy_now_item['quantity']
+                )
+                del request.session['buy_now_item']
+            else:
+                for item in cart_items:
+                    product_image = ''
+                    if item.product.image:
+                        image_url = item.product.image.url
+                        if not image_url.startswith('http'):
+                            site_url = request.build_absolute_uri('/').rstrip('/')
+                            product_image = f"{site_url}{image_url}"
+                        else:
+                            product_image = image_url
+
+                    OrderItem.objects.create(
+                        order=order,
+                        product=item.product,
+                        product_name=item.product.name,
+                        product_price=item.product.price,
+                        product_image=product_image,
+                        quantity=item.quantity
+                    )
+
+            if redeem_points and points_to_redeem > 0:
+                loyalty_account = LoyaltyPoints.objects.get(user=request.user)
+                loyalty_account.redeem_points(points_to_redeem, f"Order #{order.order_number} - ₹{points_discount} discount")
+
+            if set_default_address:
+                Address.objects.create(
+                    user=request.user,
+                    full_name=f"{first_name} {last_name}".strip(),
+                    mobile_number=phone,
+                    address_line1=address,
+                    address_line2='',
+                    city=city,
+                    state=state,
+                    pincode=postcode,
+                    country=country or 'India',
+                    address_type='HOME',
+                    is_default=True
+                )
+
+            request.session.pop('checkout_form', None)
+
+            if payment_method == 'RAZORPAY':
+                return redirect('razorpay_payment', order_id=order.id)
+
+            order.payment_status = 'PENDING'
+            order.order_status = 'PENDING'
+            order.save()
+
+            order.auto_process_approval()
+
+            if not buy_now_item:
+                Cart.objects.filter(user=request.user).delete()
+
+            send_order_confirmation_email(order)
+            send_admin_order_notification(order, request)
+
+            if order.approval_status == 'PENDING_APPROVAL':
+                messages.warning(request, f'Order placed successfully! Order #: {order.order_number}. Your order is pending approval due to security checks.')
+            else:
+                messages.success(request, f'Order placed successfully! Order #: {order.order_number}')
+
+            return redirect('order_confirmation', order_id=order.id)
+
+        except Exception as exc:
+            messages.error(request, f'Error creating order: {str(exc)}')
+            return redirect('checkout')
+
+    context = {
+        'checkout_form': checkout_form,
+        'cart_items': cart_items,
+        'subtotal': subtotal,
+        'tax': tax,
+        'shipping_cost': shipping_cost,
+        'points_discount': points_discount,
+        'total_amount': total_amount,
+        'payment_method': checkout_form.get('payment_method', 'COD'),
+        'address_text': f"{checkout_form.get('first_name', '')} {checkout_form.get('last_name', '')}\n{checkout_form.get('address', '')}\n{checkout_form.get('city', '')}, {checkout_form.get('state', '')} {checkout_form.get('postcode', '')}\n{checkout_form.get('country', '')}".strip(),
+    }
+    return render(request, 'checkout_confirm.html', context)
 def contact(request): return render(request, 'contact.html')
 def faq(request): return render(request, 'faq.html')
 
@@ -3505,6 +3567,7 @@ def shop(request):
     min_price = request.GET.get('min_price')
     max_price = request.GET.get('max_price')
     min_rating = request.GET.get('min_rating')
+    selected_category = request.GET.get('category', '').strip()
 
     if min_price:
         try:
@@ -3534,9 +3597,17 @@ def shop(request):
 
     # Get categories from CategoryIcon (dynamic admin-managed categories)
     category_icons = CategoryIcon.objects.filter(is_active=True).order_by('order', 'id')
-    # Category data without product counts
+    category_keys = {cat.category_key for cat in category_icons}
+
+    if selected_category and selected_category in category_keys:
+        products = products.filter(category=selected_category)
+    else:
+        selected_category = ''
+
+    category_counts_qs = Product.objects.filter(is_active=True).values('category').annotate(total=Count('id'))
+    category_counts = {row['category']: row['total'] for row in category_counts_qs}
     category_data = [
-        (cat.category_key, cat.name, 0)
+        (cat.category_key, cat.name, category_counts.get(cat.category_key, 0))
         for cat in category_icons
     ]
 
@@ -3579,7 +3650,7 @@ def shop(request):
         'banners': banners,
         'special_offers': special_offers,
         'category_data': category_data,
-        'selected_category': '',
+        'selected_category': selected_category,
         'min_price': min_price or '',
         'max_price': max_price or '',
         'selected_rating': min_rating or '',
@@ -5433,6 +5504,41 @@ def _return_eligibility(order):
         return False, 'No returnable items found in this order.', deadline, []
 
     return True, '', deadline, eligible_items
+
+
+def _split_full_name(full_name):
+    parts = (full_name or '').strip().split()
+    if not parts:
+        return '', ''
+    if len(parts) == 1:
+        return parts[0], ''
+    return parts[0], ' '.join(parts[1:])
+
+
+def _get_checkout_items(request):
+    cart_items = []
+    buy_now_item = None
+    total_price = 0
+
+    if 'buy_now_item' in request.session:
+        buy_now_data = request.session['buy_now_item']
+        try:
+            product = Product.objects.get(id=buy_now_data['product_id'])
+            buy_now_item = {
+                'product': product,
+                'quantity': buy_now_data['quantity'],
+                'price': float(buy_now_data['price']),
+                'subtotal': float(buy_now_data['price']) * buy_now_data['quantity']
+            }
+            total_price = buy_now_item['subtotal']
+            cart_items = [buy_now_item]
+        except Product.DoesNotExist:
+            del request.session['buy_now_item']
+    else:
+        cart_items = Cart.objects.filter(user=request.user).select_related('product')
+        total_price = sum(item.get_total_price() for item in cart_items)
+
+    return cart_items, buy_now_item, total_price
 
 
 def _log_return_history(return_request, old_status, new_status, user=None, notes=''):

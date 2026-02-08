@@ -55,66 +55,92 @@
                 <div class="col-lg-6">
                     <div class="checkbox-form">
                         <h3>Billing Details</h3>
+                        {% if default_address %}
+                        <div class="alert alert-light border d-flex align-items-center justify-content-between" style="gap: 10px;">
+                            <div>
+                                <strong>Default Address</strong><br>
+                                <small class="text-muted">{{ default_address.full_name }} - {{ default_address.city }}, {{ default_address.state }} {{ default_address.pincode }}</small>
+                            </div>
+                            <label class="d-flex align-items-center gap-2 mb-0">
+                                <input
+                                    type="checkbox"
+                                    name="use_default_address"
+                                    id="useDefaultAddress"
+                                    {% if checkout_form.use_default_address %}checked{% endif %}
+                                    data-full-name="{{ default_address.full_name }}"
+                                    data-phone="{{ default_address.mobile_number }}"
+                                    data-address1="{{ default_address.address_line1 }}"
+                                    data-address2="{{ default_address.address_line2 }}"
+                                    data-city="{{ default_address.city }}"
+                                    data-state="{{ default_address.state }}"
+                                    data-pincode="{{ default_address.pincode }}"
+                                    data-country="{{ default_address.country }}"
+                                >
+                                <span>Use default address</span>
+                            </label>
+                        </div>
+                        {% endif %}
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="checkout-form-list mb-3">
                                     <label>First Name <span class="required">*</span></label>
-                                    <input type="text" name="first_name" value="{{ user.first_name }}" required>
+                                    <input type="text" id="firstNameField" name="first_name" value="{{ checkout_form.first_name|default:user.first_name }}" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="checkout-form-list mb-3">
                                     <label>Last Name <span class="required">*</span></label>
-                                    <input type="text" name="last_name" value="{{ user.last_name }}" required>
+                                    <input type="text" id="lastNameField" name="last_name" value="{{ checkout_form.last_name|default:user.last_name }}" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="checkout-form-list mb-3">
                                     <label>Email Address <span class="required">*</span></label>
-                                    <input type="email" name="email" value="{{ user.email }}" required>
+                                    <input type="email" id="emailField" name="email" value="{{ checkout_form.email|default:user.email }}" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="checkout-form-list mb-3">
                                     <label>Phone <span class="required">*</span></label>
-                                    <input type="text" name="phone" value="{{ user_profile.mobile_number|default:'' }}" required>
+                                    <input type="text" id="phoneField" name="phone" value="{{ checkout_form.phone|default:user_profile.mobile_number|default:'' }}" required>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="country-select mb-3">
                                     <label>Country <span class="required">*</span></label>
                                     <select name="country" required>
-                                        <option value="India">India</option>
-                                        <option value="USA">USA</option>
-                                        <option value="UK">UK</option>
-                                        <option value="Canada">Canada</option>
-                                        <option value="Australia">Australia</option>
+                                        <option value="India" {% if checkout_form.country == 'India' or not checkout_form.country %}selected{% endif %}>India</option>
+                                        <option value="USA" {% if checkout_form.country == 'USA' %}selected{% endif %}>USA</option>
+                                        <option value="UK" {% if checkout_form.country == 'UK' %}selected{% endif %}>UK</option>
+                                        <option value="Canada" {% if checkout_form.country == 'Canada' %}selected{% endif %}>Canada</option>
+                                        <option value="Australia" {% if checkout_form.country == 'Australia' %}selected{% endif %}>Australia</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="checkout-form-list mb-3">
                                     <label>Address <span class="required">*</span></label>
-                                    <input type="text" name="address" placeholder="Street address" required>
+                                    <input type="text" id="addressField" name="address" value="{{ checkout_form.address|default:'' }}" placeholder="Street address" required>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="checkout-form-list mb-3">
                                     <label>Town / City <span class="required">*</span></label>
-                                    <input type="text" name="city" id="cityField" placeholder="Town / City" required>
+                                    <input type="text" name="city" id="cityField" value="{{ checkout_form.city|default:'' }}" placeholder="Town / City" required>
                                     <small class="text-muted" id="cityHint"></small>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="checkout-form-list mb-3">
                                     <label>State / County <span class="required">*</span></label>
-                                    <input type="text" name="state" placeholder="State" required>
+                                    <input type="text" id="stateField" name="state" value="{{ checkout_form.state|default:'' }}" placeholder="State" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="checkout-form-list mb-3">
                                     <label>Postcode / Zip <span class="required">*</span></label>
-                                    <input type="text" name="postcode" id="postcodeField" placeholder="Postcode / Zip" required>
+                                    <input type="text" name="postcode" id="postcodeField" value="{{ checkout_form.postcode|default:'' }}" placeholder="Postcode / Zip" required>
+                                    <small class="text-danger" id="pincodeError"></small>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -122,12 +148,16 @@
                                     <div class="checkout-form-list">
                                         <label>Order Notes (Optional)</label>
                                         <textarea name="customer_notes" cols="30" rows="5" placeholder="Notes about your order, e.g. special notes for delivery."></textarea>
+                                        <label class="d-flex align-items-center gap-2 mt-2">
+                                            <input type="checkbox" name="set_default_address" {% if checkout_form.set_default_address %}checked{% endif %}>
+                                            <span>Set as default address</span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-12 mt-3">
                                 <div class="checkout-form-list create-acc">
-                                    <input type="checkbox" id="is_resell" name="is_resell">
+                                    <input type="checkbox" id="is_resell" name="is_resell" {% if checkout_form.is_resell %}checked{% endif %}>
                                     <label for="is_resell" style="display: inline; margin-left: 5px;">
                                         <strong>🔄 Is this a Resell Order?</strong> (Check if you're reselling this product)
                                     </label>
@@ -144,11 +174,11 @@
                                         <div class="row">
                                             <div class="col-md-6 mb-3">
                                                 <label>FROM Name <span class="required">*</span></label>
-                                                <input type="text" id="from_name" name="from_name" value="{{ user.get_full_name }}" class="form-control">
+                                                <input type="text" id="from_name" name="from_name" value="{{ checkout_form.from_name|default:user.get_full_name }}" class="form-control">
                                             </div>
                                             <div class="col-md-6 mb-3">
                                                 <label>FROM Phone <span class="required">*</span></label>
-                                                <input type="text" id="from_phone" name="from_phone" value="{{ user_profile.mobile_number|default:'' }}" class="form-control">
+                                                <input type="text" id="from_phone" name="from_phone" value="{{ checkout_form.from_phone|default:user_profile.mobile_number|default:'' }}" class="form-control">
                                             </div>
                                         </div>
                                         <small class="text-muted">
@@ -181,7 +211,7 @@
                                                     <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 5px; margin-right: 10px;">
                                                 {% endif %}
                                                 <div>
-                                                    {{ item.product.name }} 
+                                                    {{ item.product.name }}
                                                     <strong class="product-quantity"> × {{ item.quantity }}</strong>
                                                 </div>
                                             </div>
@@ -263,7 +293,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header" id="codHeader">
                                         <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#codPayment" aria-expanded="true" aria-controls="codPayment">
-                                            <input type="radio" name="payment_method" value="COD" id="cod_payment" checked style="margin-right: 10px;">
+                                            <input type="radio" name="payment_method" value="COD" id="cod_payment" {% if checkout_form.payment_method == 'COD' or not checkout_form.payment_method %}checked{% endif %} style="margin-right: 10px;">
                                             Cash on Delivery (COD)
                                         </button>
                                     </h2>
@@ -277,7 +307,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header" id="razorpayHeader">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#razorpayPayment" aria-expanded="false" aria-controls="razorpayPayment">
-                                            <input type="radio" name="payment_method" value="RAZORPAY" id="razorpay_payment" style="margin-right: 10px;">
+                                            <input type="radio" name="payment_method" value="RAZORPAY" id="razorpay_payment" {% if checkout_form.payment_method == 'RAZORPAY' %}checked{% endif %} style="margin-right: 10px;">
                                             Razorpay (Cards, UPI, Wallets)
                                         </button>
                                     </h2>
@@ -321,6 +351,15 @@ document.getElementById('is_resell').addEventListener('change', function() {
         resellSection.style.display = 'none';
     }
 });
+
+// Show resell section on load if already checked
+(function () {
+    const resellCheckbox = document.getElementById('is_resell');
+    const resellSection = document.getElementById('resell_from_section');
+    if (resellCheckbox && resellSection && resellCheckbox.checked) {
+        resellSection.style.display = 'block';
+    }
+})();
 
 // Sync radio button with accordion
 document.querySelectorAll('.accordion-button').forEach(button => {
@@ -390,6 +429,13 @@ function updateTotal(pointsRedeemed) {
     const postcodeField = document.getElementById('postcodeField');
     const cityField = document.getElementById('cityField');
     const cityHint = document.getElementById('cityHint');
+    const pincodeError = document.getElementById('pincodeError');
+    const addressField = document.getElementById('addressField');
+    const stateField = document.getElementById('stateField');
+    const firstNameField = document.getElementById('firstNameField');
+    const lastNameField = document.getElementById('lastNameField');
+    const phoneField = document.getElementById('phoneField');
+    const useDefaultAddress = document.getElementById('useDefaultAddress');
     const countryField = document.querySelector('select[name="country"]');
     const pincodeValidField = document.getElementById('pincodeValid');
     const placeOrderButton = document.getElementById('placeOrderButton');
@@ -402,6 +448,11 @@ function updateTotal(pointsRedeemed) {
         if (!cityHint) return;
         cityHint.textContent = text;
         cityHint.style.color = isError ? '#dc3545' : '#6c757d';
+    };
+
+    const setPincodeError = (text) => {
+        if (!pincodeError) return;
+        pincodeError.textContent = text;
     };
 
     const updateSubmitState = (isValid) => {
@@ -426,6 +477,7 @@ function updateTotal(pointsRedeemed) {
             const result = Array.isArray(data) ? data[0] : null;
             if (!result || result.Status !== 'Success' || !result.PostOffice || !result.PostOffice.length) {
                 setHint('City not found for this pincode.', true);
+                setPincodeError('Invalid pincode. Please enter a valid 6-digit pincode.');
                 updateSubmitState(false);
                 return;
             }
@@ -433,14 +485,42 @@ function updateTotal(pointsRedeemed) {
             if (office && office.District) {
                 cityField.value = office.District;
                 setHint(`Detected: ${office.District}`, false);
+                setPincodeError('');
                 updateSubmitState(true);
             } else {
                 setHint('City not found for this pincode.', true);
+                setPincodeError('Invalid pincode. Please enter a valid 6-digit pincode.');
                 updateSubmitState(false);
             }
         } catch (error) {
             setHint('Unable to detect city right now.', true);
+            setPincodeError('Unable to validate pincode right now.');
             updateSubmitState(false);
+        }
+    };
+
+    const applyDefaultAddress = () => {
+        if (!useDefaultAddress || !useDefaultAddress.checked) return;
+        const fullName = useDefaultAddress.dataset.fullName || '';
+        const parts = fullName.trim().split(' ');
+        const first = parts.shift() || '';
+        const last = parts.join(' ');
+        if (firstNameField) firstNameField.value = first;
+        if (lastNameField) lastNameField.value = last;
+        if (phoneField) phoneField.value = useDefaultAddress.dataset.phone || '';
+        if (addressField) addressField.value = (useDefaultAddress.dataset.address1 || '').trim();
+        if (cityField) cityField.value = useDefaultAddress.dataset.city || '';
+        if (stateField) stateField.value = useDefaultAddress.dataset.state || '';
+        if (postcodeField) postcodeField.value = useDefaultAddress.dataset.pincode || '';
+        if (countryField && useDefaultAddress.dataset.country) {
+            countryField.value = useDefaultAddress.dataset.country;
+        }
+
+        const pinValue = (postcodeField.value || '').trim();
+        if (/^[0-9]{6}$/.test(pinValue)) {
+            fetchCity(pinValue);
+        } else {
+            updateSubmitState(!isIndia());
         }
     };
 
@@ -449,6 +529,7 @@ function updateTotal(pointsRedeemed) {
         if (lookupTimer) clearTimeout(lookupTimer);
         if (!/^[0-9]{6}$/.test(value)) {
             setHint('', false);
+            setPincodeError(value ? 'Invalid pincode. Please enter a 6-digit pincode.' : '');
             updateSubmitState(false);
             return;
         }
@@ -459,13 +540,22 @@ function updateTotal(pointsRedeemed) {
         countryField.addEventListener('change', () => {
             if (!isIndia()) {
                 setHint('', false);
+                setPincodeError('');
                 updateSubmitState(true);
             } else if (/^[0-9]{6}$/.test((postcodeField.value || '').trim())) {
                 updateSubmitState(pincodeValidField?.value === '1');
             } else {
+                setPincodeError('Invalid pincode. Please enter a 6-digit pincode.');
                 updateSubmitState(false);
             }
         });
+    }
+
+    if (useDefaultAddress) {
+        useDefaultAddress.addEventListener('change', applyDefaultAddress);
+        if (useDefaultAddress.checked) {
+            applyDefaultAddress();
+        }
     }
 
     if (checkoutForm) {
@@ -473,11 +563,18 @@ function updateTotal(pointsRedeemed) {
             if (isIndia() && pincodeValidField?.value !== '1') {
                 event.preventDefault();
                 setHint('Please enter a valid pincode before submitting.', true);
+                setPincodeError('Invalid pincode. Please enter a valid 6-digit pincode.');
             }
         });
     }
 
-    updateSubmitState(isIndia() ? false : true);
+    const initialPin = (postcodeField.value || '').trim();
+    if (isIndia() && /^[0-9]{6}$/.test(initialPin)) {
+        fetchCity(initialPin);
+    } else {
+        setPincodeError(isIndia() && initialPin ? 'Invalid pincode. Please enter a 6-digit pincode.' : '');
+        updateSubmitState(isIndia() ? false : true);
+    }
 })();
 </script>
 
